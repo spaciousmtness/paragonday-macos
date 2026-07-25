@@ -1,0 +1,366 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <title>Paragonday for macOS</title>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+
+    <meta name="title" content="Paragonday for macOS" />
+    <meta name="description" content="Solar-relative time in your menu bar." />
+
+    <meta property="og:type" content="website" />
+    <meta property="og:url" content="https://tealprocess.github.io/paragonday-macos/" />
+    <meta property="og:title" content="Paragonday for macOS" />
+    <meta property="og:description" content="Solar-relative time in your menu bar." />
+    <meta property="og:image" content="https://tealprocess.github.io/paragonday-macos/icon.png" />
+
+    <meta name="twitter:card" content="summary" />
+    <meta name="twitter:title" content="Paragonday for macOS" />
+    <meta name="twitter:description" content="Solar-relative time in your menu bar." />
+    <meta name="twitter:image" content="https://tealprocess.github.io/paragonday-macos/icon.png" />
+
+    <link rel="icon" type="image/png" href="icon.png" />
+    <link rel="apple-touch-icon" href="icon.png" />
+    <link rel="stylesheet" href="https://use.typekit.net/ugf3fuf.css" />
+
+    <style>
+      ::selection {
+        background-color: rgba(134, 202, 206, 0.5);
+      }
+
+      body {
+        font-family: plantin, Georgia, serif;
+        font-weight: 300;
+        margin: 0;
+        color: #111;
+        background: white;
+      }
+
+      .layout {
+        width: 700px;
+        max-width: calc(100% - 48px);
+        margin: 0 auto;
+        padding: 0 24px;
+      }
+
+      h1 {
+        font-family: "GLC Plantin", plantin, Georgia, serif;
+        font-size: 46px;
+        margin: 0 0 12px;
+        line-height: 1.2;
+      }
+
+      h2 {
+        font-family: gitan-latin, sans-serif;
+        font-weight: 600;
+        font-size: 18px;
+        margin: 48px 0 12px;
+      }
+
+      p, li {
+        font-size: 18px;
+        line-height: 1.55;
+      }
+
+      a {
+        color: #6f3fcf;
+        text-decoration: underline;
+      }
+
+      a:visited {
+        color: #6f3fcf;
+      }
+
+      a:hover {
+        background-color: yellow;
+        color: black;
+      }
+
+      .hero {
+        text-align: center;
+        padding-top: 72px;
+      }
+
+      .hero img.appicon {
+        width: 128px;
+        height: 128px;
+        display: block;
+        margin: 0 auto 20px;
+      }
+
+      .hero p.tagline {
+        font-size: 22px;
+        font-style: italic;
+        margin: 0 0 40px;
+      }
+
+      /* macOS menu bar mockup */
+      .menubar {
+        background: linear-gradient(#fbfbfd, #f0f0f3);
+        border: 1px solid #d9dada;
+        border-radius: 10px;
+        box-shadow: 0 8px 24px rgba(0, 0, 0, 0.08);
+        display: flex;
+        justify-content: flex-end;
+        align-items: center;
+        gap: 18px;
+        padding: 8px 16px;
+        font-family: -apple-system, BlinkMacSystemFont, "Helvetica Neue", sans-serif;
+        font-size: 14px;
+        color: #333;
+        margin: 0 auto 12px;
+        max-width: 560px;
+      }
+
+      .menubar .tilset {
+        font-variant-numeric: tabular-nums;
+        font-weight: 500;
+        color: teal;
+      }
+
+      .menubar .dim {
+        color: #999;
+      }
+
+      .horizon-note {
+        font-size: 14px;
+        color: #666;
+        margin-bottom: 48px;
+      }
+
+      .horizon-button {
+        font-family: gitan-latin, sans-serif;
+        font-size: 14px;
+        background: white;
+        color: teal;
+        border: 1px solid teal;
+        border-radius: 100px;
+        padding: 6px 16px;
+        cursor: pointer;
+        transition: all 200ms ease-in-out;
+      }
+
+      .horizon-button:hover {
+        background: teal;
+        color: white;
+      }
+
+      .download {
+        text-align: center;
+        margin: 48px 0;
+      }
+
+      .download a.button {
+        display: inline-block;
+        font-family: gitan-latin, sans-serif;
+        font-size: 18px;
+        font-weight: 600;
+        background: teal;
+        color: white;
+        text-decoration: none;
+        border-radius: 100px;
+        padding: 14px 36px;
+        transition: transform 200ms ease-in-out;
+      }
+
+      .download a.button:hover {
+        background: #169f9f;
+        color: white;
+        transform: scale(1.05);
+      }
+
+      .download .fineprint {
+        font-size: 14px;
+        color: #666;
+        margin-top: 10px;
+      }
+
+      ul.features {
+        padding-left: 22px;
+      }
+
+      ul.features li {
+        margin-bottom: 8px;
+      }
+
+      ol.install li {
+        margin-bottom: 8px;
+      }
+
+      .aside {
+        background: #f5f5f5;
+        border-left: 3px solid teal;
+        padding: 12px 16px;
+        font-size: 16px;
+      }
+
+      footer {
+        margin: 72px 0 48px;
+        font-size: 15px;
+        color: #666;
+        text-align: center;
+      }
+
+      @media (max-width: 600px) {
+        h1 { font-size: 34px; }
+        .hero { padding-top: 48px; }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="layout">
+      <div class="hero">
+        <img class="appicon" src="icon.png" alt="Paragonday app icon" />
+        <h1>Paragonday for macOS</h1>
+        <p class="tagline">Solar-relative time in your menu bar.</p>
+
+        <div class="menubar" aria-label="macOS menu bar preview">
+          <span class="dim">&#9678;</span>
+          <span class="dim">100%</span>
+          <span class="tilset" id="tilset">&minus;2:41 tilset</span>
+          <span class="dim" id="clock">Wed 5:03&nbsp;PM</span>
+        </div>
+        <div class="horizon-note" id="horizonNote">
+          <button class="horizon-button" id="horizonButton" type="button">
+            Allow Location to preview your Horizon Time
+          </button>
+        </div>
+
+        <div class="download">
+          <a class="button" href="https://github.com/tealprocess/paragonday-macos/releases/latest">
+            Download for macOS
+          </a>
+          <div class="fineprint">
+            Free &amp; open source &middot; Apple Silicon &middot; macOS 14+
+          </div>
+        </div>
+      </div>
+
+      <h2>What it is</h2>
+      <p>
+        Paragonday replaces the clock question &ldquo;what time is it?&rdquo; with the one
+        your body actually asks: <em>how much daylight is left?</em> It sits quietly in your
+        menu bar and shows
+        <a href="https://paragonday.systems">Horizon Time</a> &mdash; time measured from
+        sunrise and sunset where you are.
+      </p>
+      <ul class="features">
+        <li><strong>&minus;2:41 tilset</strong> during the day &mdash; 2&nbsp;h&nbsp;41&nbsp;m until sunset</li>
+        <li><strong>&minus;7:12 tilrise</strong> at night &mdash; 7&nbsp;h&nbsp;12&nbsp;m until the next sunrise</li>
+        <li>Dual display: time since sunrise and until sunset at once</li>
+        <li>Optional UTC row for coordinating across horizons</li>
+        <li>Automatic location, or type in any latitude/longitude</li>
+        <li>Works offline with a built-in astronomical fallback (&plusmn;1 minute)</li>
+      </ul>
+
+      <h2>Install</h2>
+      <ol class="install">
+        <li><a href="https://github.com/tealprocess/paragonday-macos/releases/latest">Download</a> <code>Paragonday.app.zip</code> and unzip it</li>
+        <li>Drag <code>Paragonday.app</code> into your Applications folder</li>
+        <li><strong>Right-click the app &rarr; Open &rarr; Open</strong> the first time you launch it</li>
+        <li>Allow location access (used only to compute sunrise/sunset), or choose <em>Use manual location&hellip;</em> from the menu</li>
+      </ol>
+      <p class="aside">
+        The right-click step is needed because the app isn&rsquo;t notarized with Apple yet
+        &mdash; macOS shows a warning on a plain double-click. The app is open source, so you
+        can also <a href="https://github.com/tealprocess/paragonday-macos#build-from-source">build it yourself</a>.
+      </p>
+
+      <footer>
+        <a href="https://github.com/tealprocess/paragonday-macos">Source on GitHub</a>
+        &middot;
+        <a href="https://paragonday.systems">Paragonday Systems</a>
+        &middot;
+        <a href="https://github.com/tealprocess/paragonday-ios">iOS app</a>
+      </footer>
+    </div>
+
+    <script>
+      // Live menu-bar preview: same display logic as the app, with a compact
+      // port of SunCalc's sunrise/sunset math (https://github.com/mourner/suncalc, MIT).
+      (function () {
+        var rad = Math.PI / 180, dayMs = 86400000, J1970 = 2440588, J2000 = 2451545;
+        var obliquity = rad * 23.4397, J0 = 0.0009;
+
+        function toDays(date) { return date.valueOf() / dayMs - 0.5 + J1970 - J2000; }
+        function fromJulian(j) { return new Date((j + 0.5 - J1970) * dayMs); }
+        function solarTransitJ(ds, M, L) { return J2000 + ds + 0.0053 * Math.sin(M) - 0.0069 * Math.sin(2 * L); }
+
+        function sunTimes(date, lat, lng) {
+          var lw = rad * -lng, phi = rad * lat;
+          var d = toDays(date);
+          var n = Math.round(d - J0 - lw / (2 * Math.PI));
+          var ds = J0 + lw / (2 * Math.PI) + n;
+          var M = rad * (357.5291 + 0.98560028 * ds);
+          var L = M + rad * (1.9148 * Math.sin(M) + 0.02 * Math.sin(2 * M) + 0.0003 * Math.sin(3 * M)) + rad * 102.9372 + Math.PI;
+          var dec = Math.asin(Math.sin(L) * Math.sin(obliquity));
+          var Jnoon = solarTransitJ(ds, M, L);
+          var h = rad * -0.833;
+          var cosw = (Math.sin(h) - Math.sin(phi) * Math.sin(dec)) / (Math.cos(phi) * Math.cos(dec));
+          if (cosw < -1 || cosw > 1) return null; // polar day/night
+          var w = Math.acos(cosw);
+          var Jset = solarTransitJ(J0 + (w + lw) / (2 * Math.PI) + n, M, L);
+          var Jrise = Jnoon - (Jset - Jnoon);
+          return { sunrise: fromJulian(Jrise), sunset: fromJulian(Jset) };
+        }
+
+        function fmt(seconds, label) {
+          var total = Math.round(Math.abs(seconds));
+          var hh = Math.floor(total / 3600);
+          var mm = Math.floor((total % 3600) / 60);
+          return "−" + hh + ":" + (mm < 10 ? "0" : "") + mm + " " + label;
+        }
+
+        var coords = null;
+        var tilsetEl = document.getElementById("tilset");
+        var clockEl = document.getElementById("clock");
+        var button = document.getElementById("horizonButton");
+        var note = document.getElementById("horizonNote");
+
+        function tick() {
+          var now = new Date();
+          var days = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+          clockEl.textContent = days[now.getDay()] + " " +
+            now.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
+
+          if (!coords) return;
+          var today = sunTimes(now, coords.lat, coords.lng);
+          var tomorrow = sunTimes(new Date(now.valueOf() + dayMs), coords.lat, coords.lng);
+          if (!today || !tomorrow) {
+            tilsetEl.textContent = "—:— tilset";
+            return;
+          }
+          if (now < today.sunrise) {
+            tilsetEl.textContent = fmt((today.sunrise - now) / 1000, "tilrise");
+          } else if (now < today.sunset) {
+            tilsetEl.textContent = fmt((today.sunset - now) / 1000, "tilset");
+          } else {
+            tilsetEl.textContent = fmt((tomorrow.sunrise - now) / 1000, "tilrise");
+          }
+        }
+
+        button.addEventListener("click", function () {
+          if (!navigator.geolocation) {
+            note.textContent = "Geolocation is not available in this browser.";
+            return;
+          }
+          button.disabled = true;
+          button.textContent = "Locating…";
+          navigator.geolocation.getCurrentPosition(
+            function (pos) {
+              coords = { lat: pos.coords.latitude, lng: pos.coords.longitude };
+              note.textContent = "↑ Your Horizon Time, live — exactly what the app shows.";
+              tick();
+            },
+            function () {
+              note.textContent = "Location declined — the preview above shows an example.";
+            }
+          );
+        });
+
+        tick();
+        setInterval(tick, 15000);
+      })();
+    </script>
+  </body>
+</html>
