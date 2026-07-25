@@ -1,6 +1,6 @@
 # Paragonday for macOS
 
-Solar-relative time in your menu bar.
+Solar-relative time in your menu bar. **[Website](https://tealprocess.github.io/paragonday-macos/)** · **[Download](../../releases/latest)**
 
 Paragonday replaces the clock question "what time is it?" with the one your body actually asks: **how much daylight is left?** It lives in the macOS menu bar and shows [Horizon Time](https://paragonday.systems) — time measured relative to sunrise and sunset at your location:
 
