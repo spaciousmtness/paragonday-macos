@@ -72,6 +72,16 @@ let scenes: [Scene] = [
     Scene(name: "night", now: at(21, 40)) { g in
         finishPomodoros(&g, count: 4, from: 10, 0)
     },
+    Scene(name: "morning", now: at(8, 10)) { _ in },
+    Scene(name: "finished-blocks", now: at(16, 40)) { g in
+        finishPomodoros(&g, count: 7, from: 9, 0)
+        g.setLabel("Invitation copy")
+    },
+    Scene(name: "night-running", now: at(20, 40)) { g in
+        finishPomodoros(&g, count: 4, from: 10, 0)
+        g.setLabel("Bell research")
+        g.start(.pomodoro, now: at(20, 31), daylight: daylight, calendar: cal)
+    },
 ]
 
 MainActor.assumeIsolated {

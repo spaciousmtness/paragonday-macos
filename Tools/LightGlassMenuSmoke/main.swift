@@ -108,8 +108,43 @@ check(hex(LightGlassPalette.day.button) == "#008080", "primary button is teal by
 check(hex(LightGlassPalette.night.button) == "#169F9F", "and the lighter teal by night (\(hex(LightGlassPalette.night.button)))")
 check(hex(LightGlassPalette.day.brandMark) == "#417B7D" && hex(LightGlassPalette.night.brandMark) == "#417B7D",
       "the Paragonday mark in its own teal")
-check(hex(LightGlassPalette.day.sand[0]) == "#F8C760" && hex(LightGlassPalette.day.stream) == "#F0A93F",
-      "the sunlight sand stays gold")
+check(hex(LightGlassPalette.day.sand[0]) == "#EEAE45" && hex(LightGlassPalette.day.stream) == "#CF7A28",
+      "the sunlight sand stays gold (the Melting Glass sun and its shadow side)")
+
+// The Melting Glass painting, rendered offscreen: gold sand under a dusk sky by day, starlit sand under
+// a dark sky by night, and a panel short enough for a small screen's popover.
+MainActor.assumeIsolated {
+    let w: CGFloat = LightGlassView.paintingWidth, crop = MeltingGlassPainting.crop
+    let k = w / crop.width
+    @MainActor func pixel(_ snap: LightGlass.Snapshot, _ x: CGFloat, _ y: CGFloat) -> (r: CGFloat, g: CGFloat, b: CGFloat)? {
+        let r = ImageRenderer(content: MeltingGlassPainting(scene: MeltScene(snap))
+            .frame(width: w, height: MeltingGlassPainting.height(forWidth: w)))
+        r.scale = 1
+        guard let cg = r.cgImage, let c = NSBitmapImageRep(cgImage: cg)
+            .colorAt(x: Int((x - crop.minX) * k), y: Int((y - crop.minY) * k))?.usingColorSpace(.sRGB) else { return nil }
+        return (c.redComponent, c.greenComponent, c.blueComponent)
+    }
+    /// A point well inside the top bulb's sand, below the next block's pale layer.
+    @MainActor func inSand(_ snap: LightGlass.Snapshot) -> (CGFloat, CGFloat) {
+        let scene = MeltScene(snap), glass = MeltGlass(melt: scene.melt)
+        let yS = glass.levelY(scene.share), y = yS + 0.7 * (MeltGlass.yNeck - 12 - yS)
+        return (glass.midI(y) - 6, y)
+    }
+    var g = LightGlass(now: launched)
+    let daySnap = g.snapshot(now: launched, daylight: daylight)
+    let sand = pixel(daySnap, inSand(daySnap).0, inSand(daySnap).1), sky = pixel(daySnap, 60, 60)
+    check(sand.map { $0.r > 0.7 && $0.r > $0.g && $0.g > $0.b } ?? false, "painting: gold sand by day \(String(describing: sand))")
+    check(sky.map { $0.b > $0.r } ?? false, "painting: a blue-grey sky at the top by day \(String(describing: sky))")
+    let nightNow = launched.addingTimeInterval(7 * 3600)   // three hours after this sky's sunset
+    _ = g.tick(now: nightNow, daylight: daylight)
+    let nightSnap = g.snapshot(now: nightNow, daylight: daylight)
+    let nSand = pixel(nightSnap, inSand(nightSnap).0, inSand(nightSnap).1), nSky = pixel(nightSnap, 60, 60)
+    check(nightSnap.phase == .night && (nSand.map { $0.b > $0.r } ?? false), "painting: starlit sand by night \(String(describing: nSand))")
+    check(nSky.map { $0.r + $0.g + $0.b < 0.75 } ?? false, "painting: the same drawing, dark, by night \(String(describing: nSky))")
+    let panel = ImageRenderer(content: LightGlassView(snap: daySnap, actions: LightGlassActions()))
+    let size = panel.cgImage.map { CGSize(width: $0.width, height: $0.height) } ?? .zero
+    check(size.width == 300 && size.height > 0 && size.height <= 720, "panel stays 300 pt wide and fits a small screen (\(size))")
+}
 
 print("\(failures == 0 ? "menu smoke passed" : "menu smoke FAILED (\(failures))")")
 exit(failures == 0 ? 0 : 1)
