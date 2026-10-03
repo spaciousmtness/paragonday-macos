@@ -61,9 +61,15 @@ final class ParagondayController: NSObject, CLLocationManagerDelegate {
     private var solarKey: String?  // dayKey + lat + lon
     private var apiInFlight: Bool = false
 
+    // Light Glass: the hourglass focus timer whose sand is daylight.
+    private let lightGlass = LightGlassController()
+
     // MARK: - Lifecycle
 
     func start() {
+        lightGlass.daylight = { [weak self] date in self?.daylight(on: date) }
+        lightGlass.onStatusChange = { [weak self] in self?.renderStatus(now: Date()) }
+
         buildStatusItem()
         buildMenu()
 
@@ -72,6 +78,7 @@ final class ParagondayController: NSObject, CLLocationManagerDelegate {
 
         loadInitialLocation()
         update()
+        lightGlass.restore()
 
         timer = Timer.scheduledTimer(withTimeInterval: 15.0, repeats: true) { [weak self] _ in
             self?.update()
@@ -84,6 +91,7 @@ final class ParagondayController: NSObject, CLLocationManagerDelegate {
     func stop() {
         timer?.invalidate()
         timer = nil
+        lightGlass.stop()
     }
 
     // MARK: - Status item / menu
@@ -117,6 +125,10 @@ final class ParagondayController: NSObject, CLLocationManagerDelegate {
         sourceItem = NSMenuItem(title: "Source: —", action: nil, keyEquivalent: "")
         sourceItem.isEnabled = false
         menu.addItem(sourceItem)
+
+        menu.addItem(.separator())
+
+        lightGlass.attach(to: menu, statusItem: statusItem)
 
         menu.addItem(.separator())
 
@@ -267,14 +279,7 @@ final class ParagondayController: NSObject, CLLocationManagerDelegate {
     private func update() {
         let now = Date()
 
-        let coord: CLLocationCoordinate2D? = {
-            let defaults = UserDefaults.standard
-            if defaults.bool(forKey: Prefs.manualEnabledKey) {
-                return CLLocationCoordinate2D(latitude: defaults.double(forKey: Prefs.manualLatKey),
-                                              longitude: defaults.double(forKey: Prefs.manualLonKey))
-            }
-            return cachedLocation
-        }()
+        let coord = currentCoord()
 
         if let coord = coord {
             ensureSolarWindow(for: now, coord: coord)
@@ -306,9 +311,8 @@ final class ParagondayController: NSObject, CLLocationManagerDelegate {
         }
 
         let display = computeDisplay(now: now, coord: coord)
-        if let button = statusItem.button {
-            button.title = display
-        }
+        lightGlass.heartbeat()
+        renderStatus(now: now, display: display)
 
         let lat = coord?.latitude.description ?? "nil"
         let lon = coord?.longitude.description ?? "nil"
@@ -319,6 +323,53 @@ final class ParagondayController: NSObject, CLLocationManagerDelegate {
         FileHandle.standardError.write(
             Data("[Paragonday] \(ts) auth=\(auth) lat=\(lat) lon=\(lon) phase=\(String(describing: phase)) src=\(src) display=\(display)\n".utf8)
         )
+    }
+
+    private func currentCoord() -> CLLocationCoordinate2D? {
+        let defaults = UserDefaults.standard
+        if defaults.bool(forKey: Prefs.manualEnabledKey) {
+            return CLLocationCoordinate2D(latitude: defaults.double(forKey: Prefs.manualLatKey),
+                                          longitude: defaults.double(forKey: Prefs.manualLonKey))
+        }
+        return cachedLocation
+    }
+
+    /// The status item: Horizon Time, or while a Light Glass block runs, an hourglass and its time left.
+    private func renderStatus(now: Date, display: String? = nil) {
+        guard let button = statusItem.button else { return }
+        let look = lightGlass.statusLook(now: now)
+        button.title = look.title ?? display ?? computeDisplay(now: now, coord: currentCoord())
+        if let name = look.symbol,
+           let image = NSImage(systemSymbolName: name, accessibilityDescription: "Light Glass")?
+               .withSymbolConfiguration(NSImage.SymbolConfiguration(pointSize: 13, weight: .regular)) {
+            image.isTemplate = true
+            button.image = image
+            button.imagePosition = .imageLeading
+        } else {
+            button.image = nil
+        }
+    }
+
+    /// Sunrise and sunset for the civil day containing `date`, for Light Glass: the cached window
+    /// (API-refined) for today and tomorrow, SolarMath for any other day. Nil without a location or
+    /// in polar day/night.
+    private func daylight(on date: Date) -> LightGlass.DaySpan? {
+        let cal = Calendar.current
+        if let win = solarWindow {
+            if cal.isDate(date, inSameDayAs: win.todaySunrise) {
+                return LightGlass.DaySpan(sunrise: win.todaySunrise, sunset: win.todaySunset)
+            }
+            if cal.isDate(date, inSameDayAs: win.tomorrowSunrise) {
+                return LightGlass.DaySpan(sunrise: win.tomorrowSunrise, sunset: win.tomorrowSunset)
+            }
+        }
+        guard let coord = currentCoord(), abs(coord.latitude) <= SolarMath.polarLatitudeDegrees else { return nil }
+        if case .times(let rise, let set) = SolarMath.sunriseSunset(on: date,
+                                                                     latitude: coord.latitude,
+                                                                     longitude: coord.longitude) {
+            return LightGlass.DaySpan(sunrise: rise, sunset: set)
+        }
+        return nil
     }
 
     // MARK: - Solar cache
@@ -534,7 +585,7 @@ final class ParagondayController: NSObject, CLLocationManagerDelegate {
     @objc private func showAbout() {
         let alert = NSAlert()
         alert.messageText = "Paragonday"
-        alert.informativeText = "Solar-relative time in your menu bar.\n\nUses the Paragonday API for sunrise/sunset, with a local fallback when offline."
+        alert.informativeText = "Solar-relative time in your menu bar.\n\nUses the Paragonday API for sunrise/sunset, with a local fallback when offline.\n\nLight Glass is an hourglass focus timer whose sand is daylight."
         alert.alertStyle = .informational
         alert.addButton(withTitle: "OK")
         NSApp.activate(ignoringOtherApps: true)

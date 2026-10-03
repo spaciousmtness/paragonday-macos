@@ -12,6 +12,10 @@
 		B2000000000000000000000B /* ParagondayController.swift in Sources */ = {isa = PBXBuildFile; fileRef = B2000000000000000000000A /* ParagondayController.swift */; };
 		B3000000000000000000000B /* main.swift in Sources */ = {isa = PBXBuildFile; fileRef = B3000000000000000000000A /* main.swift */; };
 		B4000000000000000000000B /* APIClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = B4000000000000000000000A /* APIClient.swift */; };
+		B5000000000000000000000B /* LightGlass.swift in Sources */ = {isa = PBXBuildFile; fileRef = B5000000000000000000000A /* LightGlass.swift */; };
+		B6000000000000000000000B /* LightGlassBell.swift in Sources */ = {isa = PBXBuildFile; fileRef = B6000000000000000000000A /* LightGlassBell.swift */; };
+		B7000000000000000000000B /* LightGlassView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B7000000000000000000000A /* LightGlassView.swift */; };
+		B8000000000000000000000B /* LightGlassController.swift in Sources */ = {isa = PBXBuildFile; fileRef = B8000000000000000000000A /* LightGlassController.swift */; };
 		C1000000000000000000000B /* AppIcon.icns in Resources */ = {isa = PBXBuildFile; fileRef = C1000000000000000000000A /* AppIcon.icns */; };
 /* End PBXBuildFile section */
 
@@ -21,6 +25,10 @@
 		B2000000000000000000000A /* ParagondayController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ParagondayController.swift; sourceTree = "<group>"; };
 		B3000000000000000000000A /* main.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = main.swift; sourceTree = "<group>"; };
 		B4000000000000000000000A /* APIClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = APIClient.swift; sourceTree = "<group>"; };
+		B5000000000000000000000A /* LightGlass.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LightGlass.swift; sourceTree = "<group>"; };
+		B6000000000000000000000A /* LightGlassBell.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LightGlassBell.swift; sourceTree = "<group>"; };
+		B7000000000000000000000A /* LightGlassView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LightGlassView.swift; sourceTree = "<group>"; };
+		B8000000000000000000000A /* LightGlassController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LightGlassController.swift; sourceTree = "<group>"; };
 		C1000000000000000000000A /* AppIcon.icns */ = {isa = PBXFileReference; lastKnownFileType = image.icns; path = AppIcon.icns; sourceTree = "<group>"; };
 		C0000000000000000000000A /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		D0000000000000000000000A /* Paragonday.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Paragonday.app; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -53,6 +61,10 @@
 				B2000000000000000000000A /* ParagondayController.swift */,
 				B1000000000000000000000A /* SolarMath.swift */,
 				B4000000000000000000000A /* APIClient.swift */,
+				B5000000000000000000000A /* LightGlass.swift */,
+				B6000000000000000000000A /* LightGlassBell.swift */,
+				B7000000000000000000000A /* LightGlassView.swift */,
+				B8000000000000000000000A /* LightGlassController.swift */,
 				C1000000000000000000000A /* AppIcon.icns */,
 				C0000000000000000000000A /* Info.plist */,
 			);
@@ -141,6 +153,10 @@
 				B2000000000000000000000B /* ParagondayController.swift in Sources */,
 				B1000000000000000000000B /* SolarMath.swift in Sources */,
 				B4000000000000000000000B /* APIClient.swift in Sources */,
+				B5000000000000000000000B /* LightGlass.swift in Sources */,
+				B6000000000000000000000B /* LightGlassBell.swift in Sources */,
+				B7000000000000000000000B /* LightGlassView.swift in Sources */,
+				B8000000000000000000000B /* LightGlassController.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

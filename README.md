@@ -15,6 +15,19 @@ Paragonday replaces the clock question "what time is it?" with the one your body
 - **Automatic location** via macOS Location Services, with the last fix cached so the app keeps working across permission resets
 - **Manual location** — enter any latitude/longitude to see Horizon Time somewhere else
 - **Online + offline**: sunrise/sunset comes from the Paragonday API when reachable, with a built-in astronomical fallback (a Swift port of [SunCalc](https://github.com/mourner/suncalc)'s Meeus-derived algorithm, ~±1 minute) when offline
+- **Light Glass**: an hourglass focus timer whose sand is daylight (below)
+
+## Light Glass
+
+A focus timer that counts in light. Its hourglass holds what is left of today's daylight; at night it holds the night until sunrise, in starlit blue, and the menu says `tilrise`.
+
+- **Blocks**: Start Pomodoro (25 minutes, then a 5-minute break; a 15-minute break after the fourth), Focus 50 (10-minute break), Deep 90 (20-minute break), Until sunset (until sunrise at night), or a custom length (its break is a fifth of it)
+- **What's next?**: a few words for the block, shown in the menu and under the hourglass
+- **While a block runs** the menu bar shows an hourglass and the time left (`18:42`); the menu shows the Horizon Time it will be when the block ends (`ends at −4:47 tilset`), and a gentle warning if it runs past sunset. Left-click opens the hourglass, right-click (or control-click) the menu. When no block runs, the menu bar is plain Horizon Time, as before
+- **The hourglass**: the top bulb is the light still to come, the block's minutes are its top layer (a dashed line marks where the sand will stand when the block ends), the light already passed lies in the bottom bulb, and every finished block rests there as a small sun
+- **At the end of a block** a soft bell rings (synthesised in the app; a nod to Brenda Hutchinson's dailybell, which rings bells at sunrise and sunset) and a notification offers the break, which starts on a click
+- **When idle**, the line under the glass says how much light has passed since your last block
+- **Today**: blocks done and light spent (`4 blocks · 1 h 40 m of light`), saved with the running block so quitting and relaunching carries on where it was
 
 ## Install
 
@@ -39,6 +52,16 @@ or from the command line:
 xcodebuild -project Paragonday.xcodeproj -scheme Paragonday -configuration Release build
 ```
 
+### Without Xcode (Command Line Tools only)
+
+```sh
+scripts/build-cli.sh              # compiles with swiftc, assembles and ad-hoc signs build/cli/Paragonday.app
+open build/cli/Paragonday.app
+
+scripts/test-lightglass.sh        # Light Glass logic tests, then an offscreen click-through of its menu
+scripts/render-lightglass.sh      # renders the hourglass (day, mid-block, past sunset, break, night) to build/renders/
+```
+
 ## How it works
 
 The app is a small AppKit menu-bar agent (no Dock icon) in plain Swift — no dependencies:
@@ -48,6 +71,10 @@ The app is a small AppKit menu-bar agent (no Dock icon) in plain Swift — no de
 | `ParagondayController.swift` | Status item, menu, location handling, display logic |
 | `APIClient.swift` | Fetches the sunrise/sunset window from the Paragonday API |
 | `SolarMath.swift` | Offline sunrise/sunset calculation (SunCalc port) |
+| `LightGlass.swift` | Light Glass rules: block state machine, light-share maths, today's tally, saving (Foundation only, tested) |
+| `LightGlassController.swift` | Light Glass in the app: menu section, menu-bar countdown, popover, notifications |
+| `LightGlassView.swift` | The hourglass, in SwiftUI |
+| `LightGlassBell.swift` | The bell, synthesised as a WAV |
 
 Above the polar circle (|lat| > 66.56°) during polar day/night the local fallback reports no sunrise/sunset and the display shows `—:— tilset`.
 
