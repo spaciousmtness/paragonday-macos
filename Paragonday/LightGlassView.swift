@@ -1,9 +1,9 @@
 import SwiftUI
 
-// The Light Glass hourglass: the top bulb holds what is left of today's light (at night, of the night
-// until sunrise), the block's minutes are the layer that pours through the neck, and each finished
-// block lies in the bottom bulb as a small sun. Draws a LightGlass.Snapshot and nothing else, so the
-// popover and the PNG render harness show exactly the same picture.
+// The Light Glass panel, in the Melting Glass look (the board's timer-dali.html): a hand-lettered
+// "What's next?", the block's countdown with a gold colon that slowly drips, Horizon Time now and when
+// the block ends, the painting (LightGlassPainting.swift), its caption, and the controls. Draws a
+// LightGlass.Snapshot and nothing else, so the popover and the PNG render harness show the same picture.
 
 struct LightGlassActions {
     var start: (LightGlass.Preset) -> Void = { _ in }
@@ -28,51 +28,48 @@ struct LightGlassPanel: View {
 
 // MARK: - Palette
 
+/// The panel's paper and ink (the sketch's page colours): warm paper by day, the same drawing at night
+/// on a dark one. The painting keeps its own palette (MeltPalette).
 struct LightGlassPalette {
-    var background: [Color]
+    var paper: Color
+    var stain: Color
+    var stain2: Color
     var ink: Color
-    var soft: Color
-    var glassLine: Color
-    var glassFill: Color
-    var frame: Color
+    var ink2: Color
+    var ink3: Color
+    var ink4: Color
+    var gold: Color
+    var rose: Color
+    var field: Color
+    /// The sunlight's gold, as the painting's sand runs (starlight by night).
     var sand: [Color]
-    var band: Color
-    var mark: Color
-    var spent: [Color]
     var stream: Color
-    var warn: Color
+    var sun: Color
+    var sunLo: Color
     var button: Color
     var buttonText: Color
     var starlit: Bool
     /// Every Paragonday page carries a teal accent: the mark in the header, teal on the primary
-    /// button. Gold stays the sunlight's own colour.
+    /// button. Gold stays the sunlight's own colour. No glow.
     var brandMark: Color { Self.paragondayTeal }
 
-    static let paragondayTeal = rgb(0x417B7D)
+    static let paragondayTeal = meltRGB(0x417B7D)
 
     static let day = LightGlassPalette(
-        background: [rgb(0xFFFBF3), rgb(0xFAEFD9)],
-        ink: rgb(0x221C15), soft: rgb(0x7D7062),
-        glassLine: rgb(0x4A3B2C, 0.35), glassFill: Color.white.opacity(0.45), frame: rgb(0x4A3426, 0.85),
-        sand: [rgb(0xF8C760), rgb(0xEC9640)], band: rgb(0xFFE9A6), mark: rgb(0xA4561B),
-        spent: [rgb(0xEBCF9F), rgb(0xD9A766)], stream: rgb(0xF0A93F), warn: rgb(0xB8501A),
-        button: rgb(0x008080), buttonText: rgb(0xFFFBF3), starlit: false)
+        paper: meltRGB(0xF3E8D6), stain: meltRGB(0xC98A46, 0.12), stain2: meltRGB(0xB5685C, 0.09),
+        ink: meltRGB(0x2A1D17), ink2: meltRGB(0x2A1D17, 0.82), ink3: meltRGB(0x2A1D17, 0.62), ink4: meltRGB(0x2A1D17, 0.22),
+        gold: meltRGB(0x8A4F08), rose: meltRGB(0xA3402F), field: meltRGB(0xFFFAF0, 0.5),
+        sand: [meltRGB(0xEEAE45), meltRGB(0xCF7A28)], stream: meltRGB(0xCF7A28),
+        sun: meltRGB(0xEEAE45), sunLo: meltRGB(0xCF7A28),
+        button: meltRGB(0x008080), buttonText: meltRGB(0xFBF3E4), starlit: false)
 
     static let night = LightGlassPalette(
-        background: [rgb(0x0D1330), rgb(0x1B2452)],
-        ink: rgb(0xEEF0FF), soft: rgb(0x9BA4CB),
-        glassLine: rgb(0xC8D2FF, 0.38), glassFill: Color.white.opacity(0.05), frame: rgb(0xB7C1EE, 0.55),
-        sand: [rgb(0x6474C2), rgb(0x2F3B7E)], band: rgb(0x9DAEF2), mark: rgb(0xDCE3FF),
-        spent: [rgb(0x2A3468), rgb(0x1F2754)], stream: rgb(0xA9B8FF), warn: rgb(0xF4B56E),
-        button: rgb(0x169F9F), buttonText: rgb(0x111735), starlit: true)
-}
-
-private func rgb(_ hex: UInt32, _ alpha: Double = 1) -> Color {
-    Color(.sRGB,
-          red: Double((hex >> 16) & 0xFF) / 255,
-          green: Double((hex >> 8) & 0xFF) / 255,
-          blue: Double(hex & 0xFF) / 255,
-          opacity: alpha)
+        paper: meltRGB(0x1B1822), stain: meltRGB(0xC98A46, 0.07), stain2: meltRGB(0xA06078, 0.08),
+        ink: meltRGB(0xF0E3CB), ink2: meltRGB(0xF0E3CB, 0.82), ink3: meltRGB(0xF0E3CB, 0.6), ink4: meltRGB(0xF0E3CB, 0.2),
+        gold: meltRGB(0xF0B24F), rose: meltRGB(0xF0907A), field: meltRGB(0xF0E3CB, 0.06),
+        sand: [meltRGB(0xD3DDF2), meltRGB(0x90A4CC)], stream: meltRGB(0xD3DDF2),
+        sun: meltRGB(0xE8A33A), sunLo: meltRGB(0xBD6B1D),
+        button: meltRGB(0x169F9F), buttonText: meltRGB(0x14121A), starlit: true)
 }
 
 // MARK: - Panel
@@ -81,151 +78,427 @@ struct LightGlassView: View {
     let snap: LightGlass.Snapshot
     var actions: LightGlassActions?
 
+    static let width: CGFloat = 300
+    static let paintingWidth: CGFloat = 268
+
     private var p: LightGlassPalette { snap.phase == .night ? .night : .day }
-    private var active: Bool { snap.mode != .idle }
+    private var breakWaiting: Bool { snap.mode == .idle && snap.offerKind == .rest }
 
     var body: some View {
-        VStack(spacing: 0) {
-            HStack(alignment: .center) {
-                ParagondayMark(color: p.brandMark)
-                    .frame(height: 13)
-                Text("LIGHT GLASS")
-                    .font(.system(size: 10, weight: .semibold))
-                    .tracking(2.2)
-                    .foregroundColor(p.soft)
-                Spacer()
-                Text(snap.horizonNow)
-                    .font(.system(size: 12, weight: .medium).monospacedDigit())
-                    .foregroundColor(p.ink)
+        let scene = MeltScene(snap)
+        VStack(alignment: .leading, spacing: 0) {
+            header
+            whatsNext.padding(.top, 9)
+            statusRow.padding(.top, 6)
+            countdown.padding(.top, 1)
+            horizonLine.padding(.top, 1)
+            if let n = noteLine { n.padding(.top, 4) }
+            ZStack {
+                MeltingGlassPainting(scene: scene).equatable()
+                MeltingGlassMotion(scene: scene)
             }
-
-            HourglassCanvas(snap: snap, palette: p)
-                .frame(height: 250)
-                .padding(.top, 10)
-
-            readout
-                .padding(.top, 10)
-
-            if snap.pomodorosInCycle > 0 || snap.title == "Pomodoro" {
-                HStack(spacing: 6) {
-                    ForEach(0..<LightGlass.pomodorosPerLongBreak, id: \.self) { i in
-                        Circle()
-                            .fill(i < snap.pomodorosInCycle ? p.stream : p.soft.opacity(0.25))
-                            .frame(width: 6, height: 6)
-                    }
-                }
-                .padding(.top, 8)
-            }
-
-            Rectangle().fill(p.soft.opacity(0.22)).frame(height: 1).padding(.top, 14)
-
-            HStack {
-                Text(snap.todayLine)
-                    .font(.system(size: 11.5))
-                    .foregroundColor(p.soft)
-                Spacer()
-            }
+            .frame(width: Self.paintingWidth, height: MeltingGlassPainting.height(forWidth: Self.paintingWidth))
             .padding(.top, 8)
-
-            if let actions = actions {
-                controls(actions)
-                    .padding(.top, 12)
-            }
+            caption.padding(.top, 3)
+            if let actions = actions { controls(actions).padding(.top, 11) }
         }
-        .padding(.horizontal, 18)
-        .padding(.vertical, 16)
-        .frame(width: 300)
-        .background(LinearGradient(colors: p.background, startPoint: .top, endPoint: .bottom))
+        .padding(.horizontal, 16)
+        .padding(.top, 13)
+        .padding(.bottom, 15)
+        .frame(width: Self.width)
+        .background(PaperBackground(p: p).equatable())
     }
 
-    @ViewBuilder private var readout: some View {
-        VStack(spacing: 3) {
-            if active {
-                Text(snap.label.isEmpty ? snap.title : snap.label)
-                    .font(.system(size: 16, weight: .regular, design: .serif))
-                    .foregroundColor(p.ink)
-                    .lineLimit(1)
-                Text(snap.remainingText)
-                    .font(.system(size: 42, weight: .light, design: .serif).monospacedDigit())
-                    .foregroundColor(p.ink)
-                if snap.mode == .paused {
-                    Text("Paused · the light keeps falling")
-                        .font(.system(size: 12, design: .serif).italic())
-                        .foregroundColor(p.soft)
-                }
-                if let ends = snap.endsAtText {
-                    Text(snap.label.isEmpty ? ends : "\(snap.title) · \(ends)")
-                        .font(.system(size: 11.5).monospacedDigit())
-                        .foregroundColor(p.soft)
-                }
-                if let warning = snap.warning {
-                    Text(warning)
-                        .font(.system(size: 11.5, weight: .medium))
-                        .foregroundColor(p.warn)
-                        .padding(.top, 2)
-                }
+    // MARK: header and readout
+
+    private var header: some View {
+        HStack(spacing: 7) {
+            ParagondayMark(color: p.brandMark).frame(height: 11)
+            (Text("PARAGONDAY · ").foregroundColor(p.ink3) + Text("LIGHT GLASS").foregroundColor(p.ink))
+                .font(MeltFont.type(9.5)).tracking(1.1)
+            Spacer(minLength: 0)
+        }
+    }
+
+    private var whatsNext: some View {
+        let empty = snap.label.isEmpty
+        let line = VStack(alignment: .leading, spacing: 1) {
+            Text(empty ? "What's next?" : snap.label)
+                .font(MeltFont.hand(19))
+                .foregroundColor(empty ? p.ink3 : p.ink)
+                .lineLimit(1)
+                .frame(maxWidth: .infinity, alignment: .leading)
+            Rectangle().fill(.clear).frame(height: 1)
+                .overlay(Line().stroke(p.ink4, style: StrokeStyle(lineWidth: 1.2, dash: [3, 2.5])))
+        }
+        return Group {
+            if let a = actions {
+                Button(action: a.editLabel) { line.contentShape(Rectangle()) }
+                    .buttonStyle(.plain)
+                    .help("What's next? Name the next block")
             } else {
-                Text(snap.leftText)
-                    .font(.system(size: 21, weight: .light, design: .serif).monospacedDigit())
-                    .foregroundColor(p.ink)
-                if let note = snap.note {
-                    Text(note)
-                        .font(.system(size: 12, design: .serif).italic())
-                        .foregroundColor(p.soft)
-                        .fixedSize(horizontal: false, vertical: true)
-                } else {
-                    Text(snap.label.isEmpty ? "What's next?" : "Next: \(snap.label)")
-                        .font(.system(size: 12, design: .serif).italic())
-                        .foregroundColor(p.soft)
-                        .lineLimit(1)
-                }
+                line
             }
         }
-        .multilineTextAlignment(.center)
-        .frame(maxWidth: .infinity)
     }
+
+    private var status: Text {
+        func cap(_ s: String) -> Text { Text(s).foregroundColor(p.ink3) }
+        func gold(_ s: String) -> Text { Text(s).foregroundColor(p.gold) }
+        switch snap.mode {
+        case .running where !snap.isRest:
+            if snap.title == "Pomodoro" {
+                return cap("FOCUS · POMODORO \(min(LightGlass.pomodorosPerLongBreak, snap.pomodorosInCycle + 1)) OF \(LightGlass.pomodorosPerLongBreak)")
+            }
+            return cap("FOCUS · \(snap.title.uppercased())")
+        case .running:
+            return cap(snap.title.uppercased())
+        case .paused:
+            return cap("PAUSED · ") + gold("THE LIGHT KEEPS FALLING")
+        case .idle:
+            if breakWaiting { return cap("BLOCK DONE · ") + gold("THE BREAK IS YOURS") }
+            return cap("READY · \((snap.next?.title ?? "Pomodoro").uppercased())")
+        }
+    }
+
+    /// The Pomodoro set shows only around a Pomodoro: one running, one next, or its break waiting.
+    private var showsDots: Bool {
+        switch snap.mode {
+        case .running, .paused: return snap.title == "Pomodoro" || (snap.isRest && snap.pomodorosInCycle > 0)
+        case .idle: return breakWaiting ? snap.pomodorosInCycle > 0 : snap.next?.title == "Pomodoro"
+        }
+    }
+
+    private var statusRow: some View {
+        HStack(alignment: .center, spacing: 8) {
+            status.font(MeltFont.type(8.6)).tracking(0.9).lineLimit(1).minimumScaleFactor(0.8)
+            Spacer(minLength: 4)
+            if showsDots {
+                PomodoroDots(done: min(LightGlass.pomodorosPerLongBreak, snap.pomodorosInCycle),
+                             current: snap.mode != .idle && !snap.isRest && snap.title == "Pomodoro", p: p)
+            }
+        }
+    }
+
+    private var countdownText: String {
+        switch snap.mode {
+        case .running, .paused: return snap.remainingText
+        case .idle: return snap.next?.countdown ?? "—:—"
+        }
+    }
+
+    @ViewBuilder private var countdown: some View {
+        if breakWaiting {
+            Text("Done.")
+                .font(.system(size: 48, weight: .regular, design: .serif).italic())
+                .foregroundColor(p.ink)
+                .padding(.vertical, 2)
+        } else {
+            let parts = countdownText.split(separator: ":", maxSplits: 1).map(String.init)
+            HStack(alignment: .firstTextBaseline, spacing: 0) {
+                Text(parts.first ?? "")
+                if parts.count > 1 {
+                    Text(":").foregroundColor(p.gold)
+                        .overlay(alignment: .top) { ColonDrip(color: p.gold, fontSize: Self.bigSize) }
+                        .padding(.horizontal, 1)
+                    Text(parts[1])
+                }
+            }
+            .font(.system(size: Self.bigSize, weight: .semibold, design: .serif).monospacedDigit())
+            .tracking(-1.2)
+            .foregroundColor(p.ink)
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel(countdownText)
+        }
+    }
+
+    static let bigSize: CGFloat = 54
+
+    /// "−3:45 tilset now → ends at −3:30 tilset", Horizon Time in the gold of the sunlight.
+    private var horizonLine: some View {
+        func plain(_ s: String) -> Text { Text(s).foregroundColor(p.ink2) }
+        func gold(_ s: String) -> Text { Text(s).foregroundColor(p.gold) }
+        /// "ends at −3:30 tilset if you resume now" → "ends at " + gold "−3:30 tilset" + " if you resume now".
+        func ends(_ s: String) -> Text {
+            guard s.hasPrefix("ends at ") else { return plain(s) }
+            let rest = String(s.dropFirst("ends at ".count))
+            if let r = rest.range(of: " if ") {
+                return plain("ends at ") + gold(String(rest[..<r.lowerBound])) + plain(String(rest[r.lowerBound...]))
+            }
+            return plain("ends at ") + gold(rest)
+        }
+        var line = gold(snap.horizonNow) + plain(" now")
+        switch snap.mode {
+        case .running, .paused:
+            if let e = snap.endsAtText { line = line + plain(" → ") + ends(e) }
+        case .idle:
+            if !breakWaiting, let n = snap.next { line = line + plain(" → ") + ends(n.endsAtText) + plain(" if started now") }
+        }
+        return line.font(MeltFont.type(10)).lineSpacing(1).fixedSize(horizontal: false, vertical: true)
+    }
+
+    private var noteLine: AnyView? {
+        let warn = snap.mode == .idle ? snap.next?.warning : snap.warning
+        if let w = warn, !breakWaiting {
+            return AnyView(Text(w).font(MeltFont.hand(13.5)).foregroundColor(p.rose).fixedSize(horizontal: false, vertical: true))
+        }
+        if let n = snap.note {
+            return AnyView(Text(n).font(MeltFont.hand(13.5)).foregroundColor(p.ink2).fixedSize(horizontal: false, vertical: true))
+        }
+        return nil
+    }
+
+    private var caption: some View {
+        (Text("The Persistence of Light").font(MeltFont.caption(11.5)).foregroundColor(p.ink2) +
+         Text(snap.dayText.isEmpty ? "" : ", \(snap.dayText)").font(MeltFont.captionRoman(11.5)).foregroundColor(p.ink3))
+            .frame(maxWidth: .infinity)
+            .multilineTextAlignment(.center)
+    }
+
+    // MARK: controls
 
     @ViewBuilder private func controls(_ a: LightGlassActions) -> some View {
-        VStack(spacing: 8) {
-            switch snap.mode {
-            case .running, .paused:
-                HStack(spacing: 8) {
-                    pill(snap.mode == .paused ? "Resume" : "Pause", primary: true, action: a.pauseResume)
-                    pill(snap.isRest ? "End break" : "Stop", action: a.stop)
-                    if !snap.isRest { pill("What's next?", action: a.editLabel) }
-                }
-            case .idle:
-                if let offer = snap.offerTitle {
-                    HStack(spacing: 8) {
-                        pill(offer, primary: true, action: a.acceptOffer)
-                        if offer.hasSuffix("break") { pill("Skip break", action: a.stop) }
+        VStack(spacing: 10) {
+            HStack(spacing: 8) {
+                switch snap.mode {
+                case .running, .paused:
+                    PrimaryButton(title: snap.mode == .paused ? "Resume" : "Pause", p: p, action: a.pauseResume)
+                    SecondaryButton(title: snap.isRest ? "End break" : "Stop", p: p, action: a.stop)
+                case .idle:
+                    if let offer = snap.offerTitle {
+                        PrimaryButton(title: offer, p: p, action: a.acceptOffer)
+                        if breakWaiting { SecondaryButton(title: "Skip break", p: p, action: a.stop) }
+                    } else {
+                        PrimaryButton(title: "Start \(Int((snap.next?.minutes ?? 25).rounded())) min", p: p) { a.start(.pomodoro) }
                     }
                 }
-                HStack(spacing: 6) {
-                    pill("Pomodoro", primary: snap.offerTitle == nil) { a.start(.pomodoro) }
-                    pill("50") { a.start(.focus50) }
-                    pill("90") { a.start(.deep90) }
-                    pill(snap.phase == .night ? "Until sunrise" : "Until sunset") { a.start(.untilSunset) }
-                }
-                HStack(spacing: 6) {
-                    pill("Custom…", action: a.custom)
-                    pill(snap.label.isEmpty ? "What's next?" : "Change what's next", action: a.editLabel)
-                }
             }
+            if snap.mode == .idle { presets(a) }
         }
     }
 
-    private func pill(_ title: String, primary: Bool = false, action: @escaping () -> Void) -> some View {
+    private func presets(_ a: LightGlassActions) -> some View {
+        let sunNumber = snap.phase == nil ? "—" : snap.horizonNow.components(separatedBy: " ").first ?? "—"
+        let chosen = snap.offerKind == .rest ? nil : snap.next?.title
+        let tiles: [(String, String, Bool, () -> Void)] = [
+            ("25", "pomodoro", chosen == "Pomodoro", { a.start(.pomodoro) }),
+            ("50", "+10 break", chosen == "Focus 50", { a.start(.focus50) }),
+            ("90", "deep work", chosen == "Deep 90", { a.start(.deep90) }),
+            ("···", "custom", chosen?.hasSuffix(" block") == true, a.custom),
+            (sunNumber, snap.phase == .night ? "till sunrise" : "till sunset",
+             chosen == "Until sunset" || chosen == "Until sunrise", { a.start(.untilSunset) }),
+        ]
+        return HStack(spacing: 6) {
+            ForEach(Array(tiles.enumerated()), id: \.offset) { i, t in
+                PresetTile(number: t.0, caption: t.1, chosen: t.2, tilt: i % 2 == 1 ? 0.6 : (i % 3 == 2 ? -0.7 : 0), p: p, action: t.3)
+            }
+        }
+    }
+}
+
+// MARK: - Pieces
+
+private struct Line: Shape {
+    func path(in r: CGRect) -> Path { var p = Path(); p.move(to: CGPoint(x: r.minX, y: r.midY)); p.addLine(to: CGPoint(x: r.maxX, y: r.midY)); return p }
+}
+
+/// Warm paper with two faint stains and its tooth; by night the same paper in the dark.
+private struct PaperBackground: View, Equatable {
+    let p: LightGlassPalette
+    static func == (a: Self, b: Self) -> Bool { a.p.starlit == b.p.starlit }
+    var body: some View {
+        Canvas { ctx, size in
+            ctx.fill(Path(CGRect(origin: .zero, size: size)), with: .color(p.paper))
+            ctx.fill(Path(CGRect(origin: .zero, size: size)),
+                     with: .radialGradient(Gradient(colors: [p.stain, p.stain.opacity(0)]), center: CGPoint(x: size.width * 0.12, y: size.height * 0.06),
+                                           startRadius: 0, endRadius: size.width * 0.75))
+            ctx.fill(Path(CGRect(origin: .zero, size: size)),
+                     with: .radialGradient(Gradient(colors: [p.stain2, p.stain2.opacity(0)]), center: CGPoint(x: size.width * 0.92, y: size.height * 0.64),
+                                           startRadius: 0, endRadius: size.width * 0.7))
+            var t = ctx
+            t.blendMode = p.starlit ? .screen : .multiply
+            t.opacity = p.starlit ? 0.25 : 0.5
+            let img = Image(decorative: MeltTexture.tooth, scale: 1).interpolation(.medium).resizable()
+            var y: CGFloat = 0
+            while y < size.height {
+                var x: CGFloat = 0
+                while x < size.width { t.draw(img, in: CGRect(x: x, y: y, width: 80, height: 80)); x += 80 }
+                y += 80
+            }
+        }
+        .allowsHitTesting(false)
+    }
+}
+
+/// Four little suns for the Pomodoro set: filled when done, ringed for the one running.
+private struct PomodoroDots: View {
+    let done: Int
+    let current: Bool
+    let p: LightGlassPalette
+    var body: some View {
+        HStack(spacing: 5) {
+            ForEach(0..<LightGlass.pomodorosPerLongBreak, id: \.self) { i in
+                let on = i < done, now = current && i == done
+                ZStack {
+                    WobblyCircle(seed: 30 + i).fill(on ? p.sun : Color.clear)
+                    WobblyCircle(seed: 30 + i).stroke(on || now ? p.sunLo : p.ink3, lineWidth: 1.2)
+                    if now { WobblyCircle(seed: 40 + i).stroke(p.sun, lineWidth: 2).padding(2) }
+                }
+                .frame(width: 9, height: 9)
+            }
+        }
+        .accessibilityLabel("\(done) of \(LightGlass.pomodorosPerLongBreak) pomodoros done")
+    }
+}
+
+private struct WobblyCircle: Shape {
+    let seed: Int
+    func path(in r: CGRect) -> Path {
+        let R = Hand.rand(seed), k1 = R() * 6.28, k2 = R() * 6.28
+        let pts: [CGPoint] = (0..<14).map { i in
+            let a = Double(i) / 14 * 2 * .pi
+            let rr = 1 + 0.06 * (0.6 * sin(a * 2 + k1) + 0.4 * sin(a * 3 + k2))
+            return CGPoint(x: r.midX + cos(a) * r.width / 2 * rr, y: r.midY + sin(a) * r.height / 2 * rr)
+        }
+        return Hand.curve(pts, closed: true)
+    }
+}
+
+/// The drop that gathers under the countdown's colon, swells, and falls (still under Reduce Motion).
+private struct ColonDrip: View {
+    let color: Color
+    let fontSize: CGFloat
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    var body: some View {
+        TimelineView(.animation(minimumInterval: 1.0 / 24, paused: reduceMotion)) { tl in
+            let (sx, sy, dy, op) = reduceMotion ? (0.8, 0.6, 0.0, 1.0) : frame(tl.date.timeIntervalSinceReferenceDate)
+            Drop()
+                .fill(color)
+                .frame(width: fontSize * 0.07, height: fontSize * 0.1)
+                .scaleEffect(x: sx, y: sy, anchor: .top)
+                .offset(y: fontSize * 0.705 + dy * fontSize)
+                .opacity(op)
+        }
+        .allowsHitTesting(false)
+        .accessibilityHidden(true)
+    }
+
+    /// The sketch's keyframes over 14 seconds: gather, swell, stretch, fall and vanish.
+    private func frame(_ t: Double) -> (CGFloat, CGFloat, CGFloat, Double) {
+        let f = t.truncatingRemainder(dividingBy: 14) / 14
+        func e(_ a: Double, _ b: Double, _ u: Double) -> CGFloat { CGFloat(a + (b - a) * u * u * (3 - 2 * u)) }
+        switch f {
+        case ..<0.62: let u = f / 0.62; return (e(0.4, 1, u), e(0.1, 1, u), 0, 1)
+        case ..<0.72: let u = (f - 0.62) / 0.1; return (e(1, 0.85, u), e(1, 1.5, u), 0, 1)
+        case ..<0.77: let u = (f - 0.72) / 0.05; return (e(0.85, 0.7, u), e(1.5, 1.2, u), CGFloat(0.3 * u * u), 1 - u)
+        default: return (0.4, 0.1, 0, 0)
+        }
+    }
+}
+
+private struct Drop: Shape {
+    func path(in r: CGRect) -> Path {
+        var p = Path()
+        p.move(to: CGPoint(x: r.midX, y: r.minY))
+        p.addCurve(to: CGPoint(x: r.midX, y: r.maxY), control1: CGPoint(x: r.maxX + r.width * 0.25, y: r.minY + r.height * 0.55),
+                   control2: CGPoint(x: r.maxX, y: r.maxY))
+        p.addCurve(to: CGPoint(x: r.midX, y: r.minY), control1: CGPoint(x: r.minX, y: r.maxY),
+                   control2: CGPoint(x: r.minX - r.width * 0.25, y: r.minY + r.height * 0.55))
+        return p
+    }
+}
+
+/// The sketch's buttons: a soft, uneven pill, the primary in Paragonday teal with a second outline
+/// inked slightly off it, as if over the paint.
+private struct PrimaryButton: View {
+    let title: String
+    let p: LightGlassPalette
+    let action: () -> Void
+    var body: some View {
         Button(action: action) {
-            Text(title)
-                .font(.system(size: 11.5, weight: .medium))
-                .lineLimit(1)
-                .padding(.horizontal, 10)
-                .padding(.vertical, 5)
-                .foregroundColor(primary ? p.buttonText : p.ink)
-                .background(Capsule().fill(primary ? p.button : p.ink.opacity(0.07)))
+            Text(title.uppercased())
+                .font(MeltFont.type(11)).tracking(1.1)
+                .foregroundColor(p.buttonText)
+                .lineLimit(1).minimumScaleFactor(0.75)
+                .frame(maxWidth: .infinity, minHeight: 34)
+                .background(UnevenRoundedRectangle(topLeadingRadius: 17, bottomLeadingRadius: 15, bottomTrailingRadius: 18, topTrailingRadius: 14)
+                    .fill(p.button))
+                .overlay(UnevenRoundedRectangle(topLeadingRadius: 15, bottomLeadingRadius: 18, bottomTrailingRadius: 14, topTrailingRadius: 17)
+                    .stroke(p.ink2, lineWidth: 1.1)
+                    .padding(EdgeInsets(top: -2, leading: -3, bottom: -1.5, trailing: -1.5))
+                    .rotationEffect(.degrees(-0.5)))
+                .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
+    }
+}
+
+private struct SecondaryButton: View {
+    let title: String
+    let p: LightGlassPalette
+    let action: () -> Void
+    var body: some View {
+        Button(action: action) {
+            Text(title.uppercased())
+                .font(MeltFont.type(11)).tracking(1.1)
+                .foregroundColor(p.ink)
+                .lineLimit(1).fixedSize()
+                .padding(.horizontal, 14)
+                .frame(minHeight: 34)
+                .overlay(UnevenRoundedRectangle(topLeadingRadius: 14, bottomLeadingRadius: 18, bottomTrailingRadius: 15, topTrailingRadius: 17)
+                    .stroke(p.ink2, lineWidth: 1.3))
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+    }
+}
+
+/// One of the five lengths, as a small card; the one the primary button starts is circled by hand in teal.
+private struct PresetTile: View {
+    let number: String
+    let caption: String
+    let chosen: Bool
+    let tilt: Double
+    let p: LightGlassPalette
+    let action: () -> Void
+    var body: some View {
+        Button(action: action) {
+            VStack(spacing: 0) {
+                Text(number)
+                    .font(.system(size: number.count >= 5 ? 12.5 : 16.5, weight: .semibold, design: .serif).monospacedDigit())
+                    .foregroundColor(chosen ? p.ink : p.ink2)
+                    .lineLimit(1).minimumScaleFactor(0.7)
+                Text(caption)
+                    .font(MeltFont.hand(9.5))
+                    .foregroundColor(chosen ? p.ink : p.ink3)
+                    .lineLimit(1).minimumScaleFactor(0.7)
+            }
+            .frame(maxWidth: .infinity, minHeight: 38)
+            .background(UnevenRoundedRectangle(topLeadingRadius: 9, bottomLeadingRadius: 13, bottomTrailingRadius: 8, topTrailingRadius: 14).fill(p.field))
+            .overlay(UnevenRoundedRectangle(topLeadingRadius: 9, bottomLeadingRadius: 13, bottomTrailingRadius: 8, topTrailingRadius: 14)
+                .stroke(chosen ? Color.clear : p.ink4, lineWidth: 1.3))
+            .overlay(chosen ? HandRing().stroke(p.button, style: StrokeStyle(lineWidth: 1.8, lineCap: .round))
+                .padding(EdgeInsets(top: -5, leading: -5, bottom: -4, trailing: -4)) : nil)
+            .rotationEffect(.degrees(tilt))
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+    }
+}
+
+/// The sketch's hand-drawn circle around the chosen length (its mask path, stretched to the card).
+private struct HandRing: Shape {
+    func path(in r: CGRect) -> Path {
+        func q(_ x: CGFloat, _ y: CGFloat) -> CGPoint { CGPoint(x: r.minX + x / 100 * r.width, y: r.minY + y / 70 * r.height) }
+        var p = Path()
+        p.move(to: q(30, 6))
+        p.addCurve(to: q(95, 31), control1: q(60, 1), control2: q(93, 8))
+        p.addCurve(to: q(45, 65), control1: q(97, 53), control2: q(73, 66))
+        p.addCurve(to: q(5, 33), control1: q(17, 64), control2: q(3, 51))
+        p.addCurve(to: q(53, 6), control1: q(7, 15), control2: q(27, 7))
+        p.addCurve(to: q(82, 14), control1: q(65, 6), control2: q(75, 9))
+        return p
     }
 }
 
@@ -249,319 +522,5 @@ struct ParagondayMark: View {
         }
         .aspectRatio(256 / 140, contentMode: .fit)
         .accessibilityLabel("Paragonday")
-    }
-}
-
-// MARK: - The glass
-
-struct HourglassCanvas: View {
-    let snap: LightGlass.Snapshot
-    let palette: LightGlassPalette
-
-    var body: some View {
-        Canvas { ctx, size in
-            HourglassDrawing(snap: snap, p: palette, size: size).draw(in: &ctx)
-        }
-    }
-}
-
-/// The glass's shape and the sand levels, kept apart from the drawing so the maths reads plainly.
-struct HourglassGeometry {
-    let cx: CGFloat
-    let yTop: CGFloat       // top cap's inner edge, where the top bulb starts
-    let yBottom: CGFloat    // bottom cap's inner edge
-    let neckTop: CGFloat
-    let neckBottom: CGFloat
-    let radius: CGFloat     // widest half-width of a bulb
-    let neck: CGFloat       // half-width of the neck
-    let capHeight: CGFloat
-    private let cumulative: [Double]   // area from the cap to t, sampled; last element is the whole bulb
-
-    static let samples = 240
-
-    init(size: CGSize) {
-        capHeight = 9
-        cx = size.width / 2
-        radius = min(size.width * 0.3, size.height * 0.31)
-        neck = 3
-        let neckLength: CGFloat = 6
-        yTop = capHeight + 1
-        yBottom = size.height - capHeight - 1
-        neckTop = size.height / 2 - neckLength / 2
-        neckBottom = size.height / 2 + neckLength / 2
-        var cum = [0.0]
-        for i in 1...Self.samples {
-            let t0 = Double(i - 1) / Double(Self.samples), t1 = Double(i) / Double(Self.samples)
-            let w = Double(Self.halfWidth(t0, radius, neck) + Self.halfWidth(t1, radius, neck))
-            cum.append(cum[i - 1] + w * (t1 - t0))
-        }
-        cumulative = cum
-    }
-
-    var bulbHeight: CGFloat { neckTop - yTop }
-
-    /// Half-width of a bulb at t (0 at its cap, 1 at the neck): rounded near the cap, widest about a
-    /// third of the way in, narrowing to the neck.
-    static func halfWidth(_ t: Double, _ radius: CGFloat, _ neck: CGFloat) -> CGFloat {
-        let u = 0.22 + 0.78 * min(1, max(0, t))
-        return neck + (radius - neck) * CGFloat(pow(max(0, sin(Double.pi * u)), 0.85))
-    }
-
-    func r(_ t: Double) -> CGFloat { Self.halfWidth(t, radius, neck) }
-    func yUpper(_ t: Double) -> CGFloat { yTop + CGFloat(t) * bulbHeight }
-    func yLower(_ t: Double) -> CGFloat { yBottom - CGFloat(t) * bulbHeight }
-
-    /// The t at which sand fills `fraction` of a bulb measured from its cap (by area, so the level
-    /// moves the way sand really would in a curved glass).
-    func t(capFraction fraction: Double) -> Double {
-        let target = min(1, max(0, fraction)) * cumulative[Self.samples]
-        var lo = 0, hi = Self.samples
-        while hi - lo > 1 {
-            let mid = (lo + hi) / 2
-            if cumulative[mid] < target { lo = mid } else { hi = mid }
-        }
-        let a = cumulative[lo], b = cumulative[hi]
-        let f = b > a ? (target - a) / (b - a) : 0
-        return (Double(lo) + f) / Double(Self.samples)
-    }
-
-    /// Top sand surface for a share of light still to come: the sand fills from the neck up.
-    func upperLevel(share: Double) -> Double { t(capFraction: 1 - share) }
-    /// Bottom pile surface for a share already passed: the pile fills from the cap up.
-    func lowerLevel(passed: Double) -> Double { t(capFraction: passed) }
-
-    func outline() -> Path {
-        var path = Path()
-        let n = 60
-        path.move(to: CGPoint(x: cx - r(0), y: yUpper(0)))
-        for i in 1...n { let t = Double(i) / Double(n); path.addLine(to: CGPoint(x: cx - r(t), y: yUpper(t))) }
-        path.addLine(to: CGPoint(x: cx - neck, y: neckBottom))
-        for i in stride(from: n, through: 0, by: -1) {
-            let t = Double(i) / Double(n); path.addLine(to: CGPoint(x: cx - r(t), y: yLower(t)))
-        }
-        path.addQuadCurve(to: CGPoint(x: cx + r(0), y: yLower(0)), control: CGPoint(x: cx, y: yBottom + 2))
-        for i in 1...n { let t = Double(i) / Double(n); path.addLine(to: CGPoint(x: cx + r(t), y: yLower(t))) }
-        path.addLine(to: CGPoint(x: cx + neck, y: neckTop))
-        for i in stride(from: n, through: 0, by: -1) {
-            let t = Double(i) / Double(n); path.addLine(to: CGPoint(x: cx + r(t), y: yUpper(t)))
-        }
-        path.addQuadCurve(to: CGPoint(x: cx - r(0), y: yUpper(0)), control: CGPoint(x: cx, y: yTop - 2))
-        path.closeSubpath()
-        return path
-    }
-
-    /// Sand in the top bulb between two levels (t from the cap; `to` nearer the neck), with a soft dip
-    /// in the surface while it pours.
-    func upperSand(from t0: Double, to t1: Double, dip: CGFloat) -> Path {
-        var path = Path()
-        let n = 40
-        path.move(to: CGPoint(x: cx - r(t0), y: yUpper(t0)))
-        for i in 1...n {
-            let t = t0 + (t1 - t0) * Double(i) / Double(n)
-            path.addLine(to: CGPoint(x: cx - r(t), y: yUpper(t)))
-        }
-        if t1 >= 0.999 {
-            path.addLine(to: CGPoint(x: cx - neck, y: neckTop + 2))
-            path.addLine(to: CGPoint(x: cx + neck, y: neckTop + 2))
-        } else {
-            path.addQuadCurve(to: CGPoint(x: cx + r(t1), y: yUpper(t1)),
-                              control: CGPoint(x: cx, y: yUpper(t1) + dip))
-        }
-        for i in stride(from: n, through: 0, by: -1) {
-            let t = t0 + (t1 - t0) * Double(i) / Double(n)
-            path.addLine(to: CGPoint(x: cx + r(t), y: yUpper(t)))
-        }
-        path.addQuadCurve(to: CGPoint(x: cx - r(t0), y: yUpper(t0)),
-                          control: CGPoint(x: cx, y: yUpper(t0) + dip))
-        path.closeSubpath()
-        return path
-    }
-
-    /// The bottom pile, from the cap up to level t, heaped where the stream lands.
-    func lowerPile(level t1: Double, mound: CGFloat) -> Path {
-        var path = Path()
-        let n = 40
-        path.move(to: CGPoint(x: cx - r(t1), y: yLower(t1)))
-        for i in stride(from: n, through: 0, by: -1) {
-            let t = t1 * Double(i) / Double(n); path.addLine(to: CGPoint(x: cx - r(t), y: yLower(t)))
-        }
-        path.addQuadCurve(to: CGPoint(x: cx + r(0), y: yLower(0)), control: CGPoint(x: cx, y: yBottom + 2))
-        for i in 1...n {
-            let t = t1 * Double(i) / Double(n); path.addLine(to: CGPoint(x: cx + r(t), y: yLower(t)))
-        }
-        path.addQuadCurve(to: CGPoint(x: cx - r(t1), y: yLower(t1)),
-                          control: CGPoint(x: cx, y: yLower(t1) - mound * 2))
-        path.closeSubpath()
-        return path
-    }
-}
-
-private struct HourglassDrawing {
-    let snap: LightGlass.Snapshot
-    let p: LightGlassPalette
-    let size: CGSize
-
-    static let minBandDepth: CGFloat = 3
-
-    func draw(in ctx: inout GraphicsContext) {
-        let g = HourglassGeometry(size: size)
-        let glass = g.outline()
-        let running = snap.mode == .running
-        let share = snap.phase == nil ? 0 : snap.topShare
-        let level = g.upperLevel(share: share)
-        let pileLevel = g.lowerLevel(passed: snap.phase == nil ? 0 : 1 - share)
-        let pileHeight = g.yLower(0) - g.yLower(pileLevel)
-        let mound = min(10, max(0, pileHeight * 0.35))
-
-        if p.starlit { drawStars(&ctx, g) }
-
-        // Frame: two caps and two slim posts.
-        let capHalf = g.radius + 14
-        for y in [0, size.height - g.capHeight] {
-            ctx.fill(Path(roundedRect: CGRect(x: g.cx - capHalf, y: y, width: capHalf * 2, height: g.capHeight),
-                          cornerRadius: 3.5), with: .color(p.frame))
-        }
-        for x in [g.cx - capHalf + 6, g.cx + capHalf - 8.5] {
-            ctx.fill(Path(roundedRect: CGRect(x: x, y: g.capHeight, width: 2.5, height: size.height - 2 * g.capHeight),
-                          cornerRadius: 1.2), with: .color(p.frame.opacity(0.45)))
-        }
-
-        ctx.fill(glass, with: .color(p.glassFill))
-
-        var sandCtx = ctx
-        sandCtx.clip(to: glass)
-
-        // Top bulb: the light still to come.
-        if share > 0.0005 {
-            let surface = g.yUpper(level)
-            let sand = g.upperSand(from: level, to: 1, dip: running ? 4 : 1.5)
-            sandCtx.fill(sand, with: .linearGradient(Gradient(colors: p.sand),
-                                                    startPoint: CGPoint(x: g.cx, y: surface),
-                                                    endPoint: CGPoint(x: g.cx, y: g.neckTop)))
-            if p.starlit { drawSparkles(&sandCtx, clip: sand, g, top: surface, bottom: g.neckTop) }
-
-            // The block's layer: the light that pours through while it runs, and where the sand will stand.
-            if snap.blockShare > 0.0005 {
-                let after = g.upperLevel(share: max(0, share - snap.blockShare))
-                // A Pomodoro is about 2% of a day's light, a sliver; draw the band at least 3 pt deep
-                // so it reads, while the dashed line below stays at the true level.
-                let drawnAfter = min(1, max(after, level + Double(Self.minBandDepth / g.bulbHeight)))
-                let layer = g.upperSand(from: level, to: drawnAfter, dip: running ? 4 : 1.5)
-                sandCtx.fill(layer, with: .color(p.band.opacity(0.92)))
-                if after < 0.995 {
-                    let y = g.yUpper(after)
-                    var mark = Path()
-                    mark.move(to: CGPoint(x: g.cx - g.r(after) + 2, y: y))
-                    mark.addQuadCurve(to: CGPoint(x: g.cx + g.r(after) - 2, y: y),
-                                      control: CGPoint(x: g.cx, y: y + (running ? 4 : 1.5)))
-                    sandCtx.stroke(mark, with: .color(p.mark),
-                                   style: StrokeStyle(lineWidth: 1.2, lineCap: .round, dash: [3, 3]))
-                }
-            }
-        }
-
-        // Bottom bulb: the light already passed.
-        if pileLevel > 0.002 {
-            let pile = g.lowerPile(level: pileLevel, mound: mound)
-            sandCtx.fill(pile, with: .linearGradient(Gradient(colors: p.spent),
-                                                    startPoint: CGPoint(x: g.cx, y: g.yLower(pileLevel) - mound),
-                                                    endPoint: CGPoint(x: g.cx, y: g.yBottom)))
-        }
-
-        // The stream: bold while a block runs; a hairline otherwise, because light passes either way.
-        if share > 0.0005 && snap.mode != .paused {
-            let top = g.neckTop - 1
-            let bottom = pileLevel > 0.002 ? g.yLower(pileLevel) - mound : g.yBottom
-            let w: CGFloat = running ? 2.2 : 1
-            sandCtx.fill(Path(CGRect(x: g.cx - w / 2, y: top, width: w, height: max(0, bottom - top))),
-                         with: .color(p.stream.opacity(running ? 1 : 0.5)))
-        }
-
-        drawSuns(&sandCtx, g)
-
-        // Glass: outline and two quiet highlights.
-        ctx.stroke(glass, with: .color(p.glassLine), lineWidth: 1.4)
-        for upper in [true, false] {
-            var shine = Path()
-            for i in 0...20 {
-                let t = 0.1 + 0.42 * Double(i) / 20
-                let pt = CGPoint(x: g.cx - g.r(t) * 0.78, y: upper ? g.yUpper(t) : g.yLower(t))
-                if i == 0 { shine.move(to: pt) } else { shine.addLine(to: pt) }
-            }
-            ctx.stroke(shine, with: .color(Color.white.opacity(p.starlit ? 0.18 : 0.75)),
-                       style: StrokeStyle(lineWidth: 2, lineCap: .round))
-        }
-    }
-
-    /// Finished blocks, as small suns resting in the bottom bulb, row by row from the bottom.
-    private func drawSuns(_ ctx: inout GraphicsContext, _ g: HourglassGeometry) {
-        let shown = min(snap.suns, 18)
-        guard shown > 0 else { return }
-        let spacing: CGFloat = 19.5
-        var placed = 0
-        var row = 0
-        while placed < shown && row < 6 {
-            let y = g.yBottom - 11 - CGFloat(row) * 14
-            let t = Double((g.yBottom - y) / g.bulbHeight)
-            let half = g.r(t) - 11
-            let fit = max(1, Int((half * 2) / spacing) + 1)
-            let n = min(fit, shown - placed)
-            let x0 = g.cx - CGFloat(n - 1) * spacing / 2 + (row % 2 == 1 ? 0 : 0)
-            for i in 0..<n { drawSun(&ctx, at: CGPoint(x: x0 + CGFloat(i) * spacing, y: y)) }
-            placed += n
-            row += 1
-        }
-        if snap.suns > shown {
-            ctx.draw(Text("+\(snap.suns - shown)").font(.system(size: 9, weight: .semibold)).foregroundColor(p.mark),
-                     at: CGPoint(x: g.cx, y: g.yBottom - 11 - CGFloat(row) * 14))
-        }
-    }
-
-    private func drawSun(_ ctx: inout GraphicsContext, at c: CGPoint) {
-        var rays = Path()
-        for k in 0..<8 {
-            let a = Double(k) * .pi / 4
-            rays.move(to: CGPoint(x: c.x + 5.6 * cos(a), y: c.y + 5.6 * sin(a)))
-            rays.addLine(to: CGPoint(x: c.x + 7.8 * cos(a), y: c.y + 7.8 * sin(a)))
-        }
-        ctx.stroke(rays, with: .color(rgbSun(0xE8901C)), style: StrokeStyle(lineWidth: 1.2, lineCap: .round))
-        let disc = Path(ellipseIn: CGRect(x: c.x - 4.3, y: c.y - 4.3, width: 8.6, height: 8.6))
-        ctx.fill(disc, with: .radialGradient(Gradient(colors: [rgbSun(0xFFE07A), rgbSun(0xF4A324)]),
-                                            center: CGPoint(x: c.x - 1.2, y: c.y - 1.2),
-                                            startRadius: 0, endRadius: 5))
-        ctx.stroke(disc, with: .color(rgbSun(0xC46F14).opacity(0.8)), lineWidth: 0.6)
-    }
-
-    private func rgbSun(_ hex: UInt32) -> Color { rgb(hex) }
-
-    private func drawStars(_ ctx: inout GraphicsContext, _ g: HourglassGeometry) {
-        var seed: UInt64 = 0x9E3779B97F4A7C15
-        func next() -> CGFloat {
-            seed = seed &* 6364136223846793005 &+ 1442695040888963407
-            return CGFloat(Double(seed >> 11) / Double(1 << 53))
-        }
-        for _ in 0..<34 {
-            let x = next() * size.width, y = next() * size.height, s = 0.6 + next() * 1.3
-            ctx.fill(Path(ellipseIn: CGRect(x: x, y: y, width: s, height: s)),
-                     with: .color(Color.white.opacity(0.25 + Double(next()) * 0.5)))
-        }
-    }
-
-    /// Starlight in the night sand: a scatter of tiny bright grains.
-    private func drawSparkles(_ ctx: inout GraphicsContext, clip: Path, _ g: HourglassGeometry,
-                              top: CGFloat, bottom: CGFloat) {
-        var c = ctx
-        c.clip(to: clip)
-        var seed: UInt64 = 0xD1B54A32D192ED03
-        func next() -> CGFloat {
-            seed = seed &* 6364136223846793005 &+ 1442695040888963407
-            return CGFloat(Double(seed >> 11) / Double(1 << 53))
-        }
-        let w = g.radius * 2
-        for _ in 0..<70 {
-            let x = g.cx - g.radius + next() * w, y = top + next() * max(1, bottom - top), s = 0.7 + next() * 1.1
-            c.fill(Path(ellipseIn: CGRect(x: x, y: y, width: s, height: s)),
-                   with: .color(Color.white.opacity(0.35 + Double(next()) * 0.5)))
-        }
     }
 }

@@ -19,6 +19,7 @@ echo
 # shellcheck disable=SC2086
 xcrun swiftc $FLAGS \
   Paragonday/LightGlass.swift Paragonday/LightGlassBell.swift Paragonday/LightGlassView.swift \
+  Paragonday/LightGlassPainting.swift \
   Paragonday/LightGlassController.swift Tools/LightGlassMenuSmoke/main.swift \
   -o build/lightglass-menu-smoke
 ./build/lightglass-menu-smoke
