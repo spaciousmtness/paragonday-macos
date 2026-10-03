@@ -570,6 +570,87 @@ test("a state saved by another version still loads") {
     eq(empty?.tally.day, "2026-10-03", "with no tally, the first tick starts today's")
 }
 
+// MARK: - What the Melting Glass painting reads
+
+test("the painting's labels read the sky in hours and minutes") {
+    let g = fresh(at(3, 6))
+    var s = g.snapshot(now: at(3, 14, 0, 40), daylight: sun, calendar: cal)
+    eq(s.startClock, "6:00 am", "SUNRISE beside the top of the glass")
+    eq(s.edgeClock, "6:00 pm", "SUNSET at the neck")
+    eq(s.passedText, "8 h", "since sunrise")
+    eq(g.snapshot(now: at(3, 14, 59, 59), daylight: sun, calendar: cal).passedText, "8 h 59 m",
+       "floored like Horizon Time, never rounded up to 9 h")
+    near(s.skySpan, 12 * 3600, 0.001, "the whole light, for the hour notches")
+    eq(s.dayText, "Saturday 3 October", "the caption's date")
+    check(s.tally == g.tally, "today's tally, for the blocks beside the bottom bulb")
+
+    s = g.snapshot(now: at(3, 21), daylight: sun, calendar: cal)
+    eq(s.startClock, "6:00 pm", "by night the top of the glass is sunset"); eq(s.edgeClock, "6:00 am")
+    eq(s.passedText, "3 h", "since sunset")
+    near(s.skySpan, 12 * 3600)
+
+    s = g.snapshot(now: at(3, 12), daylight: { _ in nil }, calendar: cal)
+    eq(s.startClock, nil, "unknown sky: no times"); eq(s.passedText, nil); eq(s.skySpan, 0)
+}
+
+test("the block's tag counts like its countdown") {
+    var g = fresh(at(3, 9))
+    eq(g.snapshot(now: at(3, 9), daylight: sun, calendar: cal).remainingSpan, nil, "idle: no block to tag")
+    g.start(.pomodoro, now: at(3, 9), daylight: sun, calendar: cal)
+    eq(g.snapshot(now: at(3, 9), daylight: sun, calendar: cal).remainingSpan, "25 m")
+    eq(g.snapshot(now: at(3, 9, 10, 30), daylight: sun, calendar: cal).remainingSpan, "15 m", "rounds up, as 0:15 does")
+    eq(g.snapshot(now: at(3, 9, 24, 59), daylight: sun, calendar: cal).remainingSpan, "1 m", "never 0 m while it runs")
+    var d = fresh(at(3, 9))
+    d.start(.deep90, now: at(3, 9), daylight: sun, calendar: cal)
+    eq(d.snapshot(now: at(3, 9), daylight: sun, calendar: cal).remainingSpan, "1 h 30 m")
+    var u = fresh(at(3, 11, 51, 40))
+    u.start(.untilSunset, now: at(3, 11, 51, 40), daylight: sun, calendar: cal)
+    let us = u.snapshot(now: at(3, 11, 51, 40), daylight: sun, calendar: cal)
+    eq(us.remainingSpan, "6 h 8 m", "until sunset floors, like the tilset beside it")
+    eq(us.remainingText, "6:08")
+}
+
+test("the next block shows in the glass before it starts") {
+    var g = fresh(at(3, 10))
+    var s = g.snapshot(now: at(3, 10), daylight: sun, calendar: cal)
+    eq(s.next?.title, "Pomodoro"); eq(s.next?.countdown, "0:25", "the countdown it would start at")
+    eq(s.next?.span, "25 m"); near(s.next?.share ?? 0, 1500.0 / 43200, 1e-9, "its layer of the light")
+    eq(s.next?.endsAtText, "ends at −7:35 tilset"); eq(s.next?.warning, nil)
+    eq(s.offerKind, nil)
+
+    g.start(.pomodoro, now: at(3, 10), daylight: sun, calendar: cal)
+    eq(g.snapshot(now: at(3, 10, 5), daylight: sun, calendar: cal).next, nil, "running: the block itself is the layer")
+
+    _ = g.tick(now: at(3, 10, 25), daylight: sun, calendar: cal)
+    s = g.snapshot(now: at(3, 10, 25), daylight: sun, calendar: cal)
+    eq(s.next, nil, "a break is waiting: nothing to preview"); eq(s.offerKind, .rest)
+
+    g.acceptOffer(now: at(3, 10, 26), daylight: sun, calendar: cal)
+    _ = g.tick(now: at(3, 10, 31), daylight: sun, calendar: cal)
+    s = g.snapshot(now: at(3, 10, 31), daylight: sun, calendar: cal)
+    eq(s.offerKind, .focus); eq(s.next?.countdown, "0:25", "after the break, the focus it offers")
+
+    var c = fresh(at(3, 10))
+    c.start(.custom, minutes: 40, now: at(3, 10), daylight: sun, calendar: cal)
+    _ = c.tick(now: at(3, 10, 40), daylight: sun, calendar: cal)
+    c.acceptOffer(now: at(3, 10, 41), daylight: sun, calendar: cal)
+    _ = c.tick(now: at(3, 10, 49), daylight: sun, calendar: cal)
+    eq(c.snapshot(now: at(3, 10, 49), daylight: sun, calendar: cal).next?.span, "40 m", "a custom block's follow-up")
+
+    let late = fresh(at(3, 17, 50)).snapshot(now: at(3, 17, 50), daylight: sun, calendar: cal)
+    eq(late.next?.warning, "This block ends 15 minutes after sunset.")
+    eq(late.next?.endsAtText, "ends at −11:45 tilrise")
+    let night = fresh(at(3, 21)).snapshot(now: at(3, 21), daylight: sun, calendar: cal)
+    eq(night.next?.endsAtText, "ends at −8:35 tilrise")
+    eq(fresh(at(3, 12)).snapshot(now: at(3, 12), daylight: { _ in nil }, calendar: cal).next?.countdown, "0:25",
+       "with the sky unknown a Pomodoro can still run")
+}
+
+test("the UTC row has no seconds") {
+    eq(LightGlass.utcRow(at(3, 19, 5, 42)), "UTC: 2026-10-03 19:05", "hours and minutes, as all Paragonday time")
+    eq(LightGlass.utcRow(at(4, 0, 0, 59)), "UTC: 2026-10-04 00:00")
+}
+
 // MARK: - The app's real sun
 
 // New York, from the app's own SolarMath, as ParagondayController reads it.

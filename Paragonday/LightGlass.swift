@@ -511,6 +511,41 @@ struct LightGlass: Codable, Equatable {
         var todayLine: String
         var offerTitle: String?
         var pomodorosInCycle: Int
+
+        // What the Melting Glass painting reads off the sky and the tally.
+
+        /// Clock times at the top of the glass and at its neck: sunrise and sunset by day ("7:05 am",
+        /// "6:50 pm"), sunset and sunrise by night. Nil when the sky is unknown.
+        var startClock: String? = nil
+        var edgeClock: String? = nil
+        /// Since sunrise (by night, since sunset), floored as Horizon Time floors: "7 h 59 m".
+        var passedText: String? = nil
+        /// Length of this light (or night), for the hour notches down the glass; 0 when unknown.
+        var skySpan: TimeInterval = 0
+        /// "Saturday 3 October", for the caption under the painting.
+        var dayText: String = ""
+        /// Today's tally, for the blocks counted beside the bottom bulb.
+        var tally: Tally = Tally(day: "")
+        /// The running block's time left for its paper tag, rounded the way its countdown is: "15 m".
+        var remainingSpan: String? = nil
+        /// What one click on the waiting offer starts, if anything is waiting.
+        var offerKind: Kind? = nil
+        /// The block that would start next, drawn as a pale layer in the glass while nothing runs.
+        var next: Preview? = nil
+    }
+
+    /// The next focus block, as the idle glass previews it: a Pomodoro, or the focus a finished break offers.
+    struct Preview: Equatable {
+        var title: String
+        var minutes: Double
+        /// "0:25": the countdown it would start at.
+        var countdown: String
+        /// "25 m", for its tag.
+        var span: String
+        /// Its layer of the top bulb.
+        var share: Double
+        var endsAtText: String
+        var warning: String?
     }
 
     func snapshot(now: Date, daylight: Daylight, calendar: Calendar = .current) -> Snapshot {
@@ -529,9 +564,19 @@ struct LightGlass: Codable, Equatable {
                             endsAtText: nil, endsAtShort: nil, warning: nil, note: nil, suns: tally.blocks,
                             todayLine: tally.line, offerTitle: offer?.title,
                             pomodorosInCycle: pomodorosInCycle)
+        snap.tally = tally
+        snap.offerKind = offer?.kind
+        snap.dayText = LightGlass.dayText(now, calendar: calendar)
+        if let sky = sky {
+            snap.startClock = LightGlass.clockTime(sky.start, calendar: calendar)
+            snap.edgeClock = LightGlass.clockTime(sky.end, calendar: calendar)
+            snap.passedText = LightGlass.spanDown(now.timeIntervalSince(sky.start))
+            snap.skySpan = sky.span
+        }
 
         guard let b = block else {
             snap.note = idleNote(now: now, sky: sky, daylight: daylight, calendar: calendar)
+            snap.next = preview(now: now, sky: sky, top: top, daylight: daylight, calendar: calendar)
             return snap
         }
         let remaining = b.remaining(at: now)
@@ -541,6 +586,7 @@ struct LightGlass: Codable, Equatable {
         snap.title = b.title(phase: sky?.phase)
         snap.label = b.kind == .rest ? "" : b.label
         snap.remainingText = b.countdown(at: now)
+        snap.remainingSpan = LightGlass.spanLeft(remaining, likeHorizon: b.kind == .focus && b.preset == .untilSunset)
         snap.progress = b.progress(at: now)
         if let sky = sky, sky.span > 0 {
             snap.blockShare = min(top, remaining / sky.span)
@@ -553,6 +599,30 @@ struct LightGlass: Codable, Equatable {
             snap.warning = "This block ends \(LightGlass.words(past.seconds)) after \(past.edge)."
         }
         return snap
+    }
+
+    /// The focus block one click would start while nothing runs: the focus a finished break offers,
+    /// else a Pomodoro. None while a break is waiting, since the break is what comes next.
+    private func preview(now: Date, sky: Sky?, top: Double, daylight: Daylight,
+                         calendar: Calendar) -> Preview? {
+        if offer?.kind == .rest { return nil }
+        let preset = offer?.preset ?? .pomodoro
+        guard let seconds = duration(of: preset, minutes: offer?.minutes, now: now, daylight: daylight,
+                                     calendar: calendar) else { return nil }
+        let horizon = preset == .untilSunset
+        let end = now.addingTimeInterval(seconds)
+        var warning: String?
+        if !horizon, let past = LightGlass.pastEdge(endingAt: end, now: now, daylight: daylight, calendar: calendar) {
+            warning = "This block ends \(LightGlass.words(past.seconds)) after \(past.edge)."
+        }
+        return Preview(
+            title: preset == .custom ? LightGlass.span(seconds) + " block" : preset.title(phase: sky?.phase),
+            minutes: seconds / 60,
+            countdown: LightGlass.clock(seconds, likeHorizon: horizon),
+            span: LightGlass.spanLeft(seconds, likeHorizon: horizon),
+            share: sky.map { $0.span > 0 ? min(top, seconds / $0.span) : 0 } ?? 0,
+            endsAtText: LightGlass.endsAt(end, daylight: daylight, calendar: calendar),
+            warning: warning)
     }
 
     private func idleNote(now: Date, sky: Sky?, daylight: Daylight, calendar: Calendar) -> String? {
@@ -611,9 +681,38 @@ struct LightGlass: Codable, Equatable {
     /// never 0:00 while time is left: for a block whose time left IS Horizon Time, so the two agree.
     static func clock(_ seconds: TimeInterval, likeHorizon: Bool = false) -> String {
         guard seconds > 0 else { return "0:00" }
-        let minutes = likeHorizon ? max(1, Int(seconds.rounded()) / 60)
-                                  : max(1, Int(((seconds - 0.001) / 60).rounded(.up)))
+        let minutes = countdownMinutes(seconds, likeHorizon: likeHorizon)
         return String(format: "%d:%02d", minutes / 60, minutes % 60)
+    }
+
+    /// The same time left as a span for a label ("15 m", "1 h 30 m"), counted exactly as `clock` counts it.
+    static func spanLeft(_ seconds: TimeInterval, likeHorizon: Bool = false) -> String {
+        guard seconds > 0 else { return "0 m" }
+        return span(TimeInterval(countdownMinutes(seconds, likeHorizon: likeHorizon) * 60))
+    }
+
+    private static func countdownMinutes(_ seconds: TimeInterval, likeHorizon: Bool) -> Int {
+        likeHorizon ? max(1, Int(seconds.rounded()) / 60) : max(1, Int(((seconds - 0.001) / 60).rounded(.up)))
+    }
+
+    /// "7:05 am", in the calendar's time zone: the sun's times as the painting labels them.
+    static func clockTime(_ date: Date, calendar: Calendar = .current) -> String {
+        format(date, "h:mm a", calendar.timeZone)
+    }
+
+    /// "Saturday 3 October", for the caption under the painting.
+    static func dayText(_ date: Date, calendar: Calendar = .current) -> String {
+        format(date, "EEEE d MMMM", calendar.timeZone)
+    }
+
+    private static func format(_ date: Date, _ pattern: String, _ zone: TimeZone) -> String {
+        let f = DateFormatter()
+        f.locale = Locale(identifier: "en_US_POSIX")
+        f.timeZone = zone
+        f.amSymbol = "am"
+        f.pmSymbol = "pm"
+        f.dateFormat = pattern
+        return f.string(from: date)
     }
 
     /// "1 h 40 m", "25 m", "2 h", to the nearest minute.
@@ -643,6 +742,11 @@ struct LightGlass: Codable, Equatable {
     static func signedHM(_ seconds: TimeInterval) -> String {
         let total = Int(abs(seconds.rounded()))
         return String(format: "\u{2212}%d:%02d", total / 3600, (total % 3600) / 60)
+    }
+
+    /// The menu's optional UTC row: "UTC: 2026-10-03 19:05". Hours and minutes, as all Paragonday time.
+    static func utcRow(_ date: Date) -> String {
+        "UTC: " + format(date, "yyyy-MM-dd HH:mm", TimeZone(identifier: "UTC")!)
     }
 
     static func clamp(_ x: Double) -> Double { min(1, max(0, x)) }
