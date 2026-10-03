@@ -27,7 +27,8 @@ A focus timer that counts in light. Its hourglass holds what is left of today's 
 - **The hourglass**: the top bulb is the light still to come, the block's minutes are its top layer (a dashed line marks where the sand will stand when the block ends), the light already passed lies in the bottom bulb, and every finished block rests there as a small sun
 - **At the end of a block** a soft bell rings (synthesised in the app; a nod to Brenda Hutchinson's dailybell, which rings bells at sunrise and sunset) and a notification offers the break, which starts on a click
 - **When idle**, the line under the glass says how much light has passed since your last block
-- **Today**: blocks done and light spent (`4 blocks · 1 h 40 m of light`), saved with the running block so quitting and relaunching carries on where it was
+- **Today**: blocks done and light spent (`4 blocks · 1 h 40 m of light`), saved with the running block so quitting and relaunching carries on where it was. Today starts at midnight, so the tally and the small suns reset then; the glass itself and the "since your last block" line follow the sun, so at 2 am the bottom bulb is empty while the top still holds the same night
+- **Breaks wait half an hour**: an offered break (or the next block after one) that isn't taken within 30 minutes is dropped. Passing up the long break, by skipping it or starting another block, begins a new cycle of four
 
 ## Install
 
@@ -56,11 +57,13 @@ xcodebuild -project Paragonday.xcodeproj -scheme Paragonday -configuration Relea
 
 ```sh
 scripts/build-cli.sh              # compiles with swiftc, assembles and ad-hoc signs build/cli/Paragonday.app
-open build/cli/Paragonday.app
+open build/cli/Paragonday.app     # quit any installed Paragonday first, or two clocks share the menu bar
 
 scripts/test-lightglass.sh        # Light Glass logic tests, then an offscreen click-through of its menu
 scripts/render-lightglass.sh      # renders the hourglass (day, mid-block, past sunset, break, night) to build/renders/
 ```
+
+The CLI build uses the released app's bundle ID, so it shares that app's settings and notification permission. `BUNDLE_ID=com.tealprocess.paragonday.dev scripts/build-cli.sh` builds one with settings of its own.
 
 ## How it works
 

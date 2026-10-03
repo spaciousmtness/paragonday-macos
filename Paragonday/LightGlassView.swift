@@ -371,6 +371,8 @@ private struct HourglassDrawing {
     let p: LightGlassPalette
     let size: CGSize
 
+    static let minBandDepth: CGFloat = 3
+
     func draw(in ctx: inout GraphicsContext) {
         let g = HourglassGeometry(size: size)
         let glass = g.outline()
@@ -411,7 +413,10 @@ private struct HourglassDrawing {
             // The block's layer: the light that pours through while it runs, and where the sand will stand.
             if snap.blockShare > 0.0005 {
                 let after = g.upperLevel(share: max(0, share - snap.blockShare))
-                let layer = g.upperSand(from: level, to: after, dip: running ? 4 : 1.5)
+                // A Pomodoro is about 2% of a day's light, a sliver; draw the band at least 3 pt deep
+                // so it reads, while the dashed line below stays at the true level.
+                let drawnAfter = min(1, max(after, level + Double(Self.minBandDepth / g.bulbHeight)))
+                let layer = g.upperSand(from: level, to: drawnAfter, dip: running ? 4 : 1.5)
                 sandCtx.fill(layer, with: .color(p.band.opacity(0.92)))
                 if after < 0.995 {
                     let y = g.yUpper(after)

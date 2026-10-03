@@ -136,8 +136,9 @@ struct LightGlass: Codable, Equatable {
 
     static let longBreakMinutes: Double = 15
     static let pomodorosPerLongBreak = 4
-    /// A block that ran out this long before the app noticed (it was quit) is counted, but its
-    /// break is not offered: half an hour late, the moment for it has passed.
+    /// Half an hour after a block ends, the moment for its offer has passed: a block that ran out
+    /// that long before the app noticed (it was quit, or the Mac slept) is counted without one, and
+    /// an offer left waiting that long is dropped.
     static let staleOfferSeconds: TimeInterval = 30 * 60
 
     enum Kind: String, Codable {
@@ -284,9 +285,16 @@ struct LightGlass: Codable, Equatable {
         rollover(now: now, calendar: calendar)
         block = Block(kind: .focus, preset: preset, label: label, duration: seconds,
                       startedAt: now, endsAt: now.addingTimeInterval(seconds), runStart: now)
-        offer = nil
+        discardOffer()
         done = nil
         return true
+    }
+
+    /// Drops a waiting offer without taking it. Passing up the long break still closes the cycle of
+    /// four, so the next Pomodoro starts a new one instead of earning another long break.
+    private mutating func discardOffer() {
+        if offer?.longRest == true { pomodorosInCycle = 0 }
+        offer = nil
     }
 
     mutating func startRest(minutes: Double, long: Bool, preset: Preset, followUp: Double?, now: Date,
@@ -337,7 +345,7 @@ struct LightGlass: Codable, Equatable {
     mutating func stop(now: Date? = nil) {
         if block?.kind == .rest, let now = now { lastEnd = now }
         block = nil
-        offer = nil
+        discardOffer()
         done = nil
     }
 
@@ -373,12 +381,18 @@ struct LightGlass: Codable, Equatable {
                 newOffer = Offer(kind: .focus, preset: b.preset, minutes: next)
             }
             let late = now.timeIntervalSince(ends)
-            if late > LightGlass.staleOfferSeconds { newOffer = nil }
             offer = newOffer
+            if late > LightGlass.staleOfferSeconds { discardOffer() }
             done = Done(kind: b.kind, label: b.label, duration: b.duration, lightSeconds: light,
-                        longRest: newOffer?.longRest ?? false)
+                        longRest: offer?.longRest ?? false)
             lastEnd = ends
-            events.append(.finished(block: b, lightSeconds: light, late: late, offer: newOffer))
+            events.append(.finished(block: b, lightSeconds: light, late: late, offer: offer))
+        } else if block == nil, offer != nil, let from = lastEnd,
+                  now.timeIntervalSince(from) > LightGlass.staleOfferSeconds {
+            // Left waiting half an hour: the offer goes, and the line under the glass moves on to
+            // the light let pass since.
+            discardOffer()
+            done = nil
         }
         rollover(now: now, calendar: calendar)
         return events
@@ -597,4 +611,74 @@ struct LightGlass: Codable, Equatable {
     }
 
     static func clamp(_ x: Double) -> Double { min(1, max(0, x)) }
+}
+
+// MARK: - Reading saved state
+//
+// Written out rather than synthesised so a state saved by another version still loads: a field with
+// a default takes it when its key is missing, and a part that can't be read (a block, an offer, the
+// tally) is dropped on its own instead of taking the running block and today's tally down with it.
+// Encoding stays synthesised. In extensions, so the structs keep their memberwise initialisers.
+
+extension LightGlass {
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        block = try? c.decodeIfPresent(Block.self, forKey: .block)
+        offer = try? c.decodeIfPresent(Offer.self, forKey: .offer)
+        label = (try? c.decodeIfPresent(String.self, forKey: .label)) ?? ""
+        pomodorosInCycle = (try? c.decodeIfPresent(Int.self, forKey: .pomodorosInCycle)) ?? 0
+        // No readable tally: an empty one, which the first tick replaces with today's.
+        tally = (try? c.decodeIfPresent(Tally.self, forKey: .tally)) ?? Tally(day: "")
+        done = try? c.decodeIfPresent(Done.self, forKey: .done)
+        lastEnd = try? c.decodeIfPresent(Date.self, forKey: .lastEnd)
+    }
+}
+
+extension LightGlass.Block {
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        kind = try c.decode(LightGlass.Kind.self, forKey: .kind)
+        preset = try c.decode(LightGlass.Preset.self, forKey: .preset)
+        label = try c.decodeIfPresent(String.self, forKey: .label) ?? ""
+        duration = try c.decode(TimeInterval.self, forKey: .duration)
+        longRest = try c.decodeIfPresent(Bool.self, forKey: .longRest) ?? false
+        followUpMinutes = try c.decodeIfPresent(Double.self, forKey: .followUpMinutes)
+        startedAt = try c.decode(Date.self, forKey: .startedAt)
+        endsAt = try c.decodeIfPresent(Date.self, forKey: .endsAt)
+        pausedRemaining = try c.decodeIfPresent(TimeInterval.self, forKey: .pausedRemaining)
+        runStart = try c.decodeIfPresent(Date.self, forKey: .runStart)
+        segments = try c.decodeIfPresent([LightGlass.Segment].self, forKey: .segments) ?? []
+    }
+}
+
+extension LightGlass.Offer {
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        kind = try c.decode(LightGlass.Kind.self, forKey: .kind)
+        preset = try c.decode(LightGlass.Preset.self, forKey: .preset)
+        minutes = try c.decode(Double.self, forKey: .minutes)
+        longRest = try c.decodeIfPresent(Bool.self, forKey: .longRest) ?? false
+        focusMinutes = try c.decodeIfPresent(Double.self, forKey: .focusMinutes)
+    }
+}
+
+extension LightGlass.Done {
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        kind = try c.decode(LightGlass.Kind.self, forKey: .kind)
+        label = try c.decodeIfPresent(String.self, forKey: .label) ?? ""
+        duration = try c.decodeIfPresent(TimeInterval.self, forKey: .duration) ?? 0
+        lightSeconds = try c.decodeIfPresent(TimeInterval.self, forKey: .lightSeconds) ?? 0
+        longRest = try c.decodeIfPresent(Bool.self, forKey: .longRest) ?? false
+    }
+}
+
+extension LightGlass.Tally {
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        day = try c.decode(String.self, forKey: .day)
+        blocks = try c.decodeIfPresent(Int.self, forKey: .blocks) ?? 0
+        focusSeconds = try c.decodeIfPresent(TimeInterval.self, forKey: .focusSeconds) ?? 0
+        lightSeconds = try c.decodeIfPresent(TimeInterval.self, forKey: .lightSeconds) ?? 0
+    }
 }

@@ -71,6 +71,17 @@ check((look.title == "25:00" || look.title == "24:59") && look.symbol == "hourgl
 check(defaults.data(forKey: LightGlass.Keys.state) != nil, "state saved for a relaunch")
 check(redraws > 0, "status item asked to redraw")
 
+// A relaunch, at the controller: a second one built from the same saved state, as the app would at launch.
+let relaunched = LightGlassController(defaults: defaults)
+relaunched.daylight = daylight
+relaunched.restore()
+let relook = relaunched.statusLook(now: Date())
+check(relook.symbol == "hourglass.bottomhalf.filled"
+        && ["25:00", "24:59", "24:58"].contains(relook.title ?? ""),
+      "after a relaunch the menu bar carries on counting down (\(relook.title ?? "nil"))")
+check(relaunched.glass.block?.preset == .pomodoro, "the relaunched controller holds the same block")
+relaunched.stop()
+
 check(click("Pause"), "click Pause")
 check(titles().contains("Resume"), "paused: Resume offered")
 check(controller.statusLook(now: Date()).title?.hasSuffix("paused") == true, "menu bar says paused")

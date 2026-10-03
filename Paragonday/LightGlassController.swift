@@ -27,6 +27,11 @@ final class LightGlassController: NSObject, NSMenuDelegate, NSPopoverDelegate, U
         return sound
     }()
     private var askedForNotifications = false
+    /// Held while a block runs, so App Nap doesn't throttle the once-a-second countdown.
+    private var activity: NSObjectProtocol?
+    /// When the popover last began closing. A transient popover closes on the mouse-down of a click
+    /// on the status item, and the mouse-up that follows must not open it again.
+    private var popoverClosedAt: Date?
 
     private static let offerCategory = "lightglass.offer"
     private static let acceptAction = "lightglass.accept"
@@ -69,6 +74,7 @@ final class LightGlassController: NSObject, NSMenuDelegate, NSPopoverDelegate, U
         glass.save(to: defaults)
         ticker?.invalidate()
         ticker = nil
+        holdActivity(false)
     }
 
     // MARK: - Clock
@@ -85,7 +91,11 @@ final class LightGlassController: NSObject, NSMenuDelegate, NSPopoverDelegate, U
             updateTicker()
         }
         handle(events)
-        if popover?.isShown == true { model?.snapshot = glass.snapshot(now: now, daylight: daylight) }
+        if let pop = popover, pop.isShown {
+            let snap = glass.snapshot(now: now, daylight: daylight)
+            model?.snapshot = snap
+            matchAppearance(pop, to: snap)   // the sun can set while the panel is open
+        }
     }
 
     /// The status item while Light Glass has something to say: the block's time left beside an
@@ -104,11 +114,23 @@ final class LightGlassController: NSObject, NSMenuDelegate, NSPopoverDelegate, U
         if needed, ticker == nil {
             let t = Timer(timeInterval: 1.0, target: self, selector: #selector(tickerFired),
                           userInfo: nil, repeats: true)
+            t.tolerance = 0.1
             RunLoop.main.add(t, forMode: .common)
             ticker = t
         } else if !needed {
             ticker?.invalidate()
             ticker = nil
+        }
+        holdActivity(running)
+    }
+
+    private func holdActivity(_ hold: Bool) {
+        if hold, activity == nil {
+            activity = ProcessInfo.processInfo.beginActivity(options: .userInitiatedAllowingIdleSystemSleep,
+                                                             reason: "A Light Glass block is running")
+        } else if !hold, let a = activity {
+            ProcessInfo.processInfo.endActivity(a)
+            activity = nil
         }
     }
 
@@ -302,7 +324,9 @@ final class LightGlassController: NSObject, NSMenuDelegate, NSPopoverDelegate, U
     // MARK: - Popover
 
     private func togglePopover() {
-        if let p = popover, p.isShown { p.performClose(nil) } else { showPopover() }
+        if let p = popover, p.isShown { p.performClose(nil); return }
+        if let closed = popoverClosedAt, Date().timeIntervalSince(closed) < 0.35 { return }
+        showPopover()
     }
 
     private func showPopover() {
@@ -324,11 +348,20 @@ final class LightGlassController: NSObject, NSMenuDelegate, NSPopoverDelegate, U
             pop.contentViewController = host
             popover = pop
         }
-        // The panel paints its own sky; match the popover's frame and arrow to it.
-        pop.appearance = NSAppearance(named: snap.phase == .night ? .darkAqua : .aqua)
+        matchAppearance(pop, to: snap)
         pop.show(relativeTo: button.bounds, of: button, preferredEdge: .minY)
         NSApp.activate(ignoringOtherApps: true)
         updateTicker()
+    }
+
+    /// The panel paints its own sky; match the popover's frame and arrow to it.
+    private func matchAppearance(_ pop: NSPopover, to snap: LightGlass.Snapshot) {
+        let name: NSAppearance.Name = snap.phase == .night ? .darkAqua : .aqua
+        if pop.appearance?.name != name { pop.appearance = NSAppearance(named: name) }
+    }
+
+    func popoverWillClose(_ notification: Notification) {
+        popoverClosedAt = Date()
     }
 
     func popoverDidClose(_ notification: Notification) {
@@ -375,7 +408,8 @@ final class LightGlassController: NSObject, NSMenuDelegate, NSPopoverDelegate, U
             content.title = "Break over. What's next?"
             if let offer = offer { body.append("Click to start \(Int(offer.minutes.rounded())) min.") }
         }
-        if late >= 60 { body.append("It finished while Paragonday wasn't running.") }
+        // Late means the app was closed or the Mac was asleep when it ended; say when, not why.
+        if late >= 60 { body.append("It finished \(LightGlass.words(late)) ago.") }
         content.body = body.joined(separator: " ")
         guard let center = notificationCenter else { return }
         if let offer = offer {

@@ -345,5 +345,234 @@ test("the quiet line: what just finished, and the light let pass") {
     eq(LightGlass.words(4200), "1 hour 10 minutes"); eq(LightGlass.words(60), "1 minute"); eq(LightGlass.words(7200), "2 hours")
 }
 
+/// Runs `n` Pomodoros back to back from `t0`, taking each short break, and stops at the offer after
+/// the last one. Returns when that last Pomodoro ended.
+func pomodoros(_ g: inout LightGlass, _ n: Int, from t0: Date) -> Date {
+    var t = t0
+    for i in 1...n {
+        g.start(.pomodoro, now: t, daylight: sun, calendar: cal)
+        t = g.block!.endsAt!
+        _ = g.tick(now: t, daylight: sun, calendar: cal)
+        if i < n {
+            g.acceptOffer(now: t, daylight: sun, calendar: cal)
+            t = g.block!.endsAt!
+            _ = g.tick(now: t, daylight: sun, calendar: cal)
+        }
+    }
+    return t
+}
+
+test("passing up the long break starts a new cycle") {
+    var g = fresh(at(3, 8))
+    var t = pomodoros(&g, 4, from: at(3, 8))
+    eq(g.offer?.longRest, true, "the fourth earns the long break"); eq(g.pomodorosInCycle, 4)
+    g.stop(now: t)   // Skip break
+    eq(g.pomodorosInCycle, 0, "skipping it closes the cycle")
+    for i in 1...2 {
+        g.start(.pomodoro, now: t, daylight: sun, calendar: cal)
+        t = g.block!.endsAt!
+        let offer = finishedOffer(g.tick(now: t, daylight: sun, calendar: cal))
+        eq(offer?.minutes, 5, "pomodoro \(i) after the skip gets a short break"); eq(offer?.longRest, false)
+        eq(g.pomodorosInCycle, i)
+        g.stop(now: t)
+    }
+
+    var direct = fresh(at(3, 8))
+    t = pomodoros(&direct, 4, from: at(3, 8))
+    direct.start(.pomodoro, now: t, daylight: sun, calendar: cal)   // straight into the next one
+    eq(direct.pomodorosInCycle, 0, "starting another Pomodoro instead also closes the cycle")
+    eq(finishedOffer(direct.tick(now: direct.block!.endsAt!, daylight: sun, calendar: cal))?.minutes, 5)
+
+    // The fourth runs out while the app is closed and the relaunch comes too late for its break.
+    let suite = "LightGlassTests-cycle-\(ProcessInfo.processInfo.processIdentifier)"
+    let defaults = UserDefaults(suiteName: suite)!
+    defer { defaults.removePersistentDomain(forName: suite) }
+    var closed = fresh(at(3, 8))
+    t = pomodoros(&closed, 3, from: at(3, 8))
+    closed.acceptOffer(now: t, daylight: sun, calendar: cal)
+    t = closed.block!.endsAt!
+    _ = closed.tick(now: t, daylight: sun, calendar: cal)
+    closed.start(.pomodoro, now: t, daylight: sun, calendar: cal)
+    let fourthEnds = closed.block!.endsAt!
+    closed.save(to: defaults)
+    var relaunched = LightGlass.load(from: defaults, now: fourthEnds.addingTimeInterval(3600), calendar: cal)
+    let events = relaunched.tick(now: fourthEnds.addingTimeInterval(3600), daylight: sun, calendar: cal)
+    eq(finishedOffer(events), nil, "no break an hour late"); eq(relaunched.tally.blocks, 4)
+    eq(relaunched.pomodorosInCycle, 0, "a long break dropped as stale closes the cycle too")
+}
+
+test("a waiting offer expires after half an hour") {
+    var g = fresh(at(3, 9))
+    g.setLabel("Venue shortlist")
+    g.start(.pomodoro, now: at(3, 9), daylight: sun, calendar: cal)
+    _ = g.tick(now: at(3, 9, 25), daylight: sun, calendar: cal)
+    _ = g.tick(now: at(3, 9, 54), daylight: sun, calendar: cal)
+    eq(g.offer?.title, "Start 5-min break", "still offered 29 minutes on")
+    eq(g.tick(now: at(3, 9, 56), daylight: sun, calendar: cal).count, 0)
+    eq(g.offer, nil, "gone after 31"); eq(g.done, nil)
+    eq(g.pomodorosInCycle, 1, "a short break dropped leaves the cycle alone")
+    eq(g.snapshot(now: at(3, 9, 56), daylight: sun, calendar: cal).note,
+       "Since your last block: 31 m of light has passed.")
+    eq(g.tally.blocks, 1, "the block itself still counts")
+
+    var long = fresh(at(3, 8))
+    let t = pomodoros(&long, 4, from: at(3, 8))
+    _ = long.tick(now: t.addingTimeInterval(31 * 60), daylight: sun, calendar: cal)
+    check(long.offer == nil && long.pomodorosInCycle == 0, "a long break left waiting closes the cycle")
+
+    var after = fresh(at(3, 10))
+    after.start(.pomodoro, now: at(3, 10), daylight: sun, calendar: cal)
+    _ = after.tick(now: at(3, 10, 25), daylight: sun, calendar: cal)
+    after.acceptOffer(now: at(3, 10, 25), daylight: sun, calendar: cal)
+    _ = after.tick(now: at(3, 10, 30), daylight: sun, calendar: cal)
+    eq(after.offer?.title, "Start 25 min")
+    _ = after.tick(now: at(3, 11, 1), daylight: sun, calendar: cal)
+    eq(after.offer, nil, "the next block's offer after a break expires the same way")
+
+    var sunset = fresh(at(3, 17, 30))
+    sunset.start(.untilSunset, now: at(3, 17, 30), daylight: sun, calendar: cal)
+    _ = sunset.tick(now: at(3, 18), daylight: sun, calendar: cal)
+    _ = sunset.tick(now: at(3, 19), daylight: sun, calendar: cal)
+    check(sunset.done != nil, "with no offer waiting, what just finished stays")
+}
+
+test("a state saved by another version still loads") {
+    func decode(_ json: String) -> LightGlass? {
+        try? JSONDecoder().decode(LightGlass.self, from: Data(json.utf8))
+    }
+    let start = at(3, 9).timeIntervalSinceReferenceDate
+    let minimal = """
+    {"tally":{"day":"2026-10-03","blocks":2},
+     "block":{"kind":"focus","preset":"pomodoro","duration":1500,"startedAt":\(start),"endsAt":\(start + 1500)},
+     "offer":{"kind":"rest","preset":"pomodoro","minutes":5},
+     "aFieldFromTheFuture":true}
+    """
+    let g = decode(minimal)
+    check(g != nil, "a blob missing every defaulted key decodes")
+    eq(g?.block?.longRest, false); eq(g?.block?.segments, []); eq(g?.block?.label, "")
+    eq(g?.offer?.longRest, false); eq(g?.offer?.title, "Start 5-min break")
+    eq(g?.label, ""); eq(g?.pomodorosInCycle, 0); eq(g?.tally.blocks, 2); eq(g?.tally.focusSeconds, 0)
+    eq(g?.statusText(now: at(3, 9, 10)), "15:00", "and the block keeps counting")
+
+    let unreadable = """
+    {"tally":{"day":"2026-10-03","blocks":3,"focusSeconds":4500,"lightSeconds":4500},
+     "block":{"kind":"focus","preset":"aPresetFromTheFuture","duration":1500,"startedAt":\(start)}}
+    """
+    let u = decode(unreadable)
+    eq(u?.block, nil, "a block it can't read is dropped"); eq(u?.tally.blocks, 3, "today's tally survives it")
+
+    var empty = decode("{}")
+    check(empty != nil, "an empty object decodes")
+    _ = empty?.tick(now: at(3, 9), daylight: sun, calendar: cal)
+    eq(empty?.tally.day, "2026-10-03", "with no tally, the first tick starts today's")
+}
+
+// MARK: - The app's real sun
+
+// New York, from the app's own SolarMath, as ParagondayController reads it.
+var ny = Calendar(identifier: .gregorian)
+ny.timeZone = TimeZone(identifier: "America/New_York")!
+let nyLat = 40.7128, nyLon = -74.0060
+
+func solar(_ d: Date) -> LightGlass.DaySpan? {
+    if case .times(let rise, let set) = SolarMath.sunriseSunset(on: d, latitude: nyLat, longitude: nyLon,
+                                                                 timeZone: ny.timeZone) {
+        return .init(sunrise: rise, sunset: set)
+    }
+    return nil
+}
+
+func nyAt(_ month: Int, _ day: Int, _ h: Int, _ m: Int = 0) -> Date {
+    ny.date(from: DateComponents(year: 2026, month: month, day: day, hour: h, minute: m))!
+}
+
+test("Light Glass reads the same Horizon Time as the menu bar") {
+    // The window ParagondayController.installLocalWindow builds for `now`, and its daylight(on:) provider.
+    struct Window { var todaySunrise, todaySunset, tomorrowSunrise, tomorrowSunset: Date }
+    func window(for now: Date) -> Window? {
+        guard let t = solar(now), let n = solar(ny.date(byAdding: .day, value: 1, to: now)!) else { return nil }
+        return Window(todaySunrise: t.sunrise, todaySunset: t.sunset, tomorrowSunrise: n.sunrise, tomorrowSunset: n.sunset)
+    }
+    func provider(_ win: Window) -> LightGlass.Daylight {
+        { date in
+            if ny.isDate(date, inSameDayAs: win.todaySunrise) { return .init(sunrise: win.todaySunrise, sunset: win.todaySunset) }
+            if ny.isDate(date, inSameDayAs: win.tomorrowSunrise) { return .init(sunrise: win.tomorrowSunrise, sunset: win.tomorrowSunset) }
+            return solar(date)
+        }
+    }
+    // Copied from ParagondayController.computeDisplay, single display; the source check below keeps
+    // the copy honest.
+    func menuBar(_ now: Date, _ win: Window) -> String {
+        func signedHM(seconds: TimeInterval, positive: Bool) -> String {
+            let total = Int(abs(seconds.rounded()))
+            return String(format: "%@%d:%02d", positive ? "+" : "\u{2212}", total / 3600, (total % 3600) / 60)
+        }
+        if now < win.todaySunrise {
+            return "\(signedHM(seconds: now.timeIntervalSince(win.todaySunrise), positive: false)) tilrise"
+        }
+        if now >= win.todaySunset {
+            return "\(signedHM(seconds: now.timeIntervalSince(win.tomorrowSunrise), positive: false)) tilrise"
+        }
+        return "\(signedHM(seconds: now.timeIntervalSince(win.todaySunset), positive: false)) tilset"
+    }
+    let source = (try? String(contentsOfFile: "Paragonday/ParagondayController.swift", encoding: .utf8)) ?? ""
+    for line in [
+        "return \"\\(signedHM(seconds: now.timeIntervalSince(win.todaySunset), positive: false)) tilset\"",
+        "return \"\\(signedHM(seconds: now.timeIntervalSince(win.todaySunrise), positive: false)) tilrise\"",
+        "return \"\\(signedHM(seconds: now.timeIntervalSince(win.tomorrowSunrise), positive: false)) tilrise\"",
+        "if now < win.todaySunrise { return .beforeSunrise }",
+        "if now >= win.todaySunset { return .afterSunset }",
+    ] {
+        check(source.contains(line), "computeDisplay still reads: \(line)")
+    }
+
+    // Every 7 minutes through four days: an ordinary one, the day after, the autumn clock change and midwinter.
+    for (month, day) in [(10, 3), (10, 4), (11, 1), (12, 21)] {
+        var mismatches: [String] = []
+        var seen = 0
+        var now = nyAt(month, day, 0)
+        let end = ny.date(byAdding: .day, value: 1, to: now)!
+        while now < end {
+            if let win = window(for: now) {
+                let theirs = menuBar(now, win)
+                let ours = LightGlass.horizon(at: now, daylight: provider(win), calendar: ny)
+                if theirs != ours { mismatches.append("\(now): menu bar \(theirs), Light Glass \(ours)") }
+                // The light share's span is the same stretch the menu bar counts down to.
+                if let sky = LightGlass.sky(at: now, daylight: provider(win), calendar: ny) {
+                    let target = now < win.todaySunrise ? win.todaySunrise
+                        : now >= win.todaySunset ? win.tomorrowSunrise : win.todaySunset
+                    if sky.end != target { mismatches.append("\(now): sky ends \(sky.end), menu bar counts to \(target)") }
+                }
+                seen += 1
+            }
+            now = now.addingTimeInterval(7 * 60)
+        }
+        check(seen > 200 && mismatches.isEmpty,
+              "2026-\(month)-\(day): \(seen) instants, \(mismatches.count) disagree \(mismatches.prefix(3))")
+    }
+}
+
+test("light counted across a clock change") {
+    // 1 November 2026: New York falls back at 2:00, so the civil day is 25 hours long.
+    let nov1 = solar(nyAt(11, 1, 12))!
+    near(LightGlass.lightSeconds(in: [.init(start: nyAt(11, 1, 10), end: nyAt(11, 1, 10, 25))],
+                                 daylight: solar, calendar: ny), 1500, 0.5, "a morning Pomodoro")
+    near(LightGlass.lightSeconds(in: [.init(start: nyAt(11, 1, 0), end: nyAt(11, 2, 0))], daylight: solar, calendar: ny),
+         nov1.sunset.timeIntervalSince(nov1.sunrise), 0.5, "the whole day holds exactly its daylight")
+    let repeatedHour = ny.date(from: DateComponents(year: 2026, month: 11, day: 1, hour: 1, minute: 30))!
+    eq(LightGlass.lightSeconds(in: [.init(start: repeatedHour, end: repeatedHour.addingTimeInterval(2 * 3600))],
+                               daylight: solar, calendar: ny), 0, "the repeated night hour holds none")
+
+    // 8 March 2026: springs forward at 2:00, a 23-hour day.
+    let mar8 = solar(nyAt(3, 8, 12))!
+    near(LightGlass.lightSeconds(in: [.init(start: nyAt(3, 7, 20), end: nyAt(3, 9, 4))], daylight: solar, calendar: ny),
+         mar8.sunset.timeIntervalSince(mar8.sunrise), 0.5, "a stretch across the short day holds that day's light")
+    let three = LightGlass.lightSeconds(in: [.init(start: nyAt(3, 7, 0), end: nyAt(3, 10, 0))], daylight: solar, calendar: ny)
+    let expected = [nyAt(3, 7, 12), nyAt(3, 8, 12), nyAt(3, 9, 12)].reduce(0.0) { sum, d in
+        let s = solar(d)!; return sum + s.sunset.timeIntervalSince(s.sunrise)
+    }
+    near(three, expected, 0.5, "three days across the change count each day once")
+}
+
 print("\n\(passes) checks passed, \(failures) failed")
 exit(failures == 0 ? 0 : 1)

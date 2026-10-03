@@ -339,15 +339,24 @@ final class ParagondayController: NSObject, CLLocationManagerDelegate {
         guard let button = statusItem.button else { return }
         let look = lightGlass.statusLook(now: now)
         button.title = look.title ?? display ?? computeDisplay(now: now, coord: currentCoord())
-        if let name = look.symbol,
-           let image = NSImage(systemSymbolName: name, accessibilityDescription: "Light Glass")?
-               .withSymbolConfiguration(NSImage.SymbolConfiguration(pointSize: 13, weight: .regular)) {
-            image.isTemplate = true
-            button.image = image
+        if let name = look.symbol, let image = hourglassImage(name) {
+            if button.image !== image { button.image = image }
             button.imagePosition = .imageLeading
-        } else {
+        } else if button.image != nil {
             button.image = nil
         }
+    }
+
+    /// The three hourglass glyphs, made once: this runs every second while a block counts down.
+    private var hourglassImages: [String: NSImage] = [:]
+
+    private func hourglassImage(_ name: String) -> NSImage? {
+        if let cached = hourglassImages[name] { return cached }
+        guard let image = NSImage(systemSymbolName: name, accessibilityDescription: "Light Glass")?
+            .withSymbolConfiguration(NSImage.SymbolConfiguration(pointSize: 13, weight: .regular)) else { return nil }
+        image.isTemplate = true
+        hourglassImages[name] = image
+        return image
     }
 
     /// Sunrise and sunset for the civil day containing `date`, for Light Glass: the cached window
