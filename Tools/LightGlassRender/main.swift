@@ -54,6 +54,10 @@ let scenes: [Scene] = [
         g.setLabel("Draft the dailybell note")
         g.start(.pomodoro, now: at(14, 55), daylight: daylight, calendar: cal)
     },
+    Scene(name: "until-sunset", now: at(11, 52)) { g in
+        finishPomodoros(&g, count: 1, from: 10, 0)
+        g.start(.untilSunset, now: at(11, 51), daylight: daylight, calendar: cal)
+    },
     Scene(name: "past-sunset", now: at(17, 55)) { g in
         finishPomodoros(&g, count: 3, from: 10, 0)
         g.setLabel("Edit the proposal")

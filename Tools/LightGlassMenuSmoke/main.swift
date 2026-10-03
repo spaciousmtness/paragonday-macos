@@ -1,4 +1,5 @@
 import AppKit
+import SwiftUI
 
 // Clicks through the Light Glass menu section offscreen: a plain NSMenu, no status item, no app
 // launched, nothing in the menu bar. Checks the AppKit wiring the logic tests can't reach (items
@@ -63,11 +64,11 @@ check(controller.statusLook(now: Date()).title == nil, "idle: the menu bar keeps
 
 check(click("Start Pomodoro"), "click Start Pomodoro")
 print("running:  \(titles())")
-check(titles().contains(where: { $0.hasPrefix("Pomodoro · 25:00 left") || $0.hasPrefix("Pomodoro · 24:59 left") }), "countdown line")
-check(titles().contains(where: { $0.hasPrefix("ends at −") && $0.hasSuffix("tilset") }), "ends-at Horizon Time")
+check(titles().contains("Pomodoro · 0:25 left"), "countdown line, hours and minutes")
+check(titles().contains(where: { $0.hasPrefix("ends −") && $0.hasSuffix(" TS") }), "ends-at Horizon Time, in the Sun Dial's shorthand")
 check(titles().contains("Pause") && titles().contains("Stop") && !titles().contains("Start Pomodoro"), "running controls replace the presets")
 let look = controller.statusLook(now: Date())
-check((look.title == "25:00" || look.title == "24:59") && look.symbol == "hourglass.bottomhalf.filled", "menu bar shows an hourglass and the time left")
+check(look.title == "0:25" && look.symbol == "hourglass.bottomhalf.filled", "menu bar shows an hourglass and the time left, no seconds")
 check(defaults.data(forKey: LightGlass.Keys.state) != nil, "state saved for a relaunch")
 check(redraws > 0, "status item asked to redraw")
 
@@ -76,8 +77,7 @@ let relaunched = LightGlassController(defaults: defaults)
 relaunched.daylight = daylight
 relaunched.restore()
 let relook = relaunched.statusLook(now: Date())
-check(relook.symbol == "hourglass.bottomhalf.filled"
-        && ["25:00", "24:59", "24:58"].contains(relook.title ?? ""),
+check(relook.symbol == "hourglass.bottomhalf.filled" && relook.title == "0:25",
       "after a relaunch the menu bar carries on counting down (\(relook.title ?? "nil"))")
 check(relaunched.glass.block?.preset == .pomodoro, "the relaunched controller holds the same block")
 relaunched.stop()
@@ -97,6 +97,19 @@ check(controller.glass.tally.blocks == 0, "a stopped block isn't counted")
 check(click("Deep 90"), "click Deep 90")
 check(controller.glass.block?.duration == 90 * 60, "Deep 90 is ninety minutes")
 check(click("Stop"), "stop it")
+
+// The teal accent: Paragonday's mark beside the panel's name, teal on the primary button; the sand stays gold.
+func hex(_ c: Color) -> String {
+    guard let n = NSColor(c).usingColorSpace(.sRGB) else { return "?" }
+    return String(format: "#%02X%02X%02X", Int((n.redComponent * 255).rounded()),
+                  Int((n.greenComponent * 255).rounded()), Int((n.blueComponent * 255).rounded()))
+}
+check(hex(LightGlassPalette.day.button) == "#008080", "primary button is teal by day (\(hex(LightGlassPalette.day.button)))")
+check(hex(LightGlassPalette.night.button) == "#169F9F", "and the lighter teal by night (\(hex(LightGlassPalette.night.button)))")
+check(hex(LightGlassPalette.day.brandMark) == "#417B7D" && hex(LightGlassPalette.night.brandMark) == "#417B7D",
+      "the Paragonday mark in its own teal")
+check(hex(LightGlassPalette.day.sand[0]) == "#F8C760" && hex(LightGlassPalette.day.stream) == "#F0A93F",
+      "the sunlight sand stays gold")
 
 print("\(failures == 0 ? "menu smoke passed" : "menu smoke FAILED (\(failures))")")
 exit(failures == 0 ? 0 : 1)

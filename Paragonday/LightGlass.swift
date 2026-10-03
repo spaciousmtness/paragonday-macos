@@ -50,6 +50,8 @@ struct LightGlass: Codable, Equatable {
 
         /// "tilset" by day, "tilrise" by night, as the menu bar says it.
         var word: String { phase == .day ? "tilset" : "tilrise" }
+        /// The Sun Dial's shorthand for the same word, where a label is abbreviated: "TS" or "TR".
+        var short: String { phase == .day ? "TS" : "TR" }
     }
 
     static func sky(at now: Date, daylight: Daylight, calendar: Calendar = .current) -> Sky? {
@@ -68,11 +70,27 @@ struct LightGlass: Codable, Equatable {
     }
 
     /// Horizon Time at any instant, in the menu bar's single-display format ("−4:47 tilset",
-    /// "−9:02 tilrise"). Mirrors ParagondayController.computeDisplay/signedHM so a block's end can be
-    /// read the same way the menu bar reads the present; it does not replace that code.
+    /// "−9:02 tilrise"). Mirrors ParagondayController.computeDisplay/signedHM so the panel reads the
+    /// present the same way the menu bar does; it does not replace that code. A block's end goes
+    /// through `endsAt`, which also knows an end at sunset or sunrise.
     static func horizon(at instant: Date, daylight: Daylight, calendar: Calendar = .current) -> String {
         guard let sky = sky(at: instant, daylight: daylight, calendar: calendar) else { return "—:— tilset" }
         return "\(signedHM(instant.timeIntervalSince(sky.end))) \(sky.word)"
+    }
+
+    /// Where a block ending at `end` lands: "ends at −4:47 tilset" (compact: "ends −4:47 TS"), or
+    /// "ends at sunset" / "ends at sunrise" when it ends within a minute of one. Read at the instant
+    /// itself, an end exactly at sunset sits on the first second of the night and would print the
+    /// whole night ahead ("−12:15 tilrise"), which is what an Until sunset block used to say.
+    static func endsAt(_ end: Date, compact: Bool = false, daylight: Daylight,
+                       calendar: Calendar = .current) -> String {
+        guard let sky = sky(at: end, daylight: daylight, calendar: calendar) else {
+            return compact ? "ends —:— TS" : "ends at —:— tilset"
+        }
+        if abs(end.timeIntervalSince(sky.end)) < 60 { return "ends at \(sky.phase == .day ? "sunset" : "sunrise")" }
+        if abs(end.timeIntervalSince(sky.start)) < 60 { return "ends at \(sky.phase == .day ? "sunrise" : "sunset")" }
+        let hm = signedHM(end.timeIntervalSince(sky.end))
+        return compact ? "ends \(hm) \(sky.short)" : "ends at \(hm) \(sky.word)"
     }
 
     /// Seconds of the given running stretches that fell between a sunrise and a sunset.
@@ -174,6 +192,12 @@ struct LightGlass: Codable, Equatable {
             if let r = pausedRemaining { return r }
             guard let e = endsAt else { return 0 }
             return max(0, e.timeIntervalSince(now))
+        }
+
+        /// The time left as the menu bar and the panel print it. An Until sunset (or sunrise) block's
+        /// time left is Horizon Time itself, so it reads the same minutes as the Horizon Time beside it.
+        func countdown(at now: Date) -> String {
+            LightGlass.clock(remaining(at: now), likeHorizon: kind == .focus && preset == .untilSunset)
         }
 
         /// When it will end if it keeps running from `now` (a paused block is treated as resumed now).
@@ -449,10 +473,10 @@ struct LightGlass: Codable, Equatable {
         return title
     }
 
-    /// Menu-bar text while a block runs: the time left ("18:42"), or nil when idle.
+    /// Menu-bar text while a block runs: the time left ("0:18"), or nil when idle.
     func statusText(now: Date) -> String? {
         guard let b = block else { return nil }
-        let clock = LightGlass.clock(b.remaining(at: now))
+        let clock = b.countdown(at: now)
         if b.isPaused { return "\(clock) paused" }
         return b.kind == .rest ? "\(clock) break" : clock
     }
@@ -474,7 +498,10 @@ struct LightGlass: Codable, Equatable {
         var label: String
         var remainingText: String
         var progress: Double
+        /// "ends at −4:47 tilset", for the panel; "ends at sunset" for a block that ends with the light.
         var endsAtText: String?
+        /// The same in the Sun Dial's shorthand, for the menu: "ends −4:47 TS".
+        var endsAtShort: String?
         var warning: String?
         /// One quiet line, as on the web: the block just done, "Break over. What's next?", or the light
         /// let pass since the last block.
@@ -499,7 +526,7 @@ struct LightGlass: Codable, Equatable {
                             horizonNow: LightGlass.horizon(at: now, daylight: daylight, calendar: calendar),
                             leftText: leftText, topShare: top, blockShare: 0, isRest: false,
                             title: "Light Glass", label: label, remainingText: "", progress: 0,
-                            endsAtText: nil, warning: nil, note: nil, suns: tally.blocks,
+                            endsAtText: nil, endsAtShort: nil, warning: nil, note: nil, suns: tally.blocks,
                             todayLine: tally.line, offerTitle: offer?.title,
                             pomodorosInCycle: pomodorosInCycle)
 
@@ -513,13 +540,14 @@ struct LightGlass: Codable, Equatable {
         snap.isRest = b.kind == .rest
         snap.title = b.title(phase: sky?.phase)
         snap.label = b.kind == .rest ? "" : b.label
-        snap.remainingText = LightGlass.clock(remaining)
+        snap.remainingText = b.countdown(at: now)
         snap.progress = b.progress(at: now)
         if let sky = sky, sky.span > 0 {
             snap.blockShare = min(top, remaining / sky.span)
         }
-        let endsAt = "ends at \(LightGlass.horizon(at: end, daylight: daylight, calendar: calendar))"
-        snap.endsAtText = b.isPaused ? "\(endsAt) if you resume now" : endsAt
+        let ifResumed = b.isPaused ? " if you resume now" : ""
+        snap.endsAtText = LightGlass.endsAt(end, daylight: daylight, calendar: calendar) + ifResumed
+        snap.endsAtShort = LightGlass.endsAt(end, compact: true, daylight: daylight, calendar: calendar) + ifResumed
         if b.kind == .focus, b.preset != .untilSunset,
            let past = LightGlass.pastEdge(endingAt: end, now: now, daylight: daylight, calendar: calendar) {
             snap.warning = "This block ends \(LightGlass.words(past.seconds)) after \(past.edge)."
@@ -574,11 +602,18 @@ struct LightGlass: Codable, Equatable {
         return String(format: "%04d-%02d-%02d", c.year ?? 0, c.month ?? 0, c.day ?? 0)
     }
 
-    /// "18:42", or "1:12:05" past the hour. Rounds up, so a fresh Pomodoro reads 25:00.
-    static func clock(_ seconds: TimeInterval) -> String {
-        let total = max(0, Int(seconds.rounded(.up)))
-        let h = total / 3600, m = (total % 3600) / 60, s = total % 60
-        return h > 0 ? String(format: "%d:%02d:%02d", h, m, s) : String(format: "%d:%02d", m, s)
+    /// Time left as H:MM ("0:25", "6:40"): Paragonday never displays seconds. It counts the minute it
+    /// is in, the way a countdown should, so a fresh Pomodoro reads 0:25, its last minute 0:01, and it
+    /// never reads 0:00 while any time is left. A millisecond of slack absorbs Date arithmetic, which
+    /// can make a 25-minute block 1500.0000001 seconds long.
+    ///
+    /// `likeHorizon` drops the seconds the way Horizon Time does instead (6:39:45 reads 6:39), still
+    /// never 0:00 while time is left: for a block whose time left IS Horizon Time, so the two agree.
+    static func clock(_ seconds: TimeInterval, likeHorizon: Bool = false) -> String {
+        guard seconds > 0 else { return "0:00" }
+        let minutes = likeHorizon ? max(1, Int(seconds.rounded()) / 60)
+                                  : max(1, Int(((seconds - 0.001) / 60).rounded(.up)))
+        return String(format: "%d:%02d", minutes / 60, minutes % 60)
     }
 
     /// "1 h 40 m", "25 m", "2 h", to the nearest minute.

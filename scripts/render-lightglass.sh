@@ -1,5 +1,5 @@
 #!/bin/sh
-# Renders the Light Glass hourglass (idle day, mid-block, past sunset, night) to PNGs with SwiftUI's
+# Renders the Light Glass hourglass (idle day, mid-block, until sunset, past sunset, break ready, night) to PNGs with SwiftUI's
 # ImageRenderer, without launching the app. Usage: scripts/render-lightglass.sh [output-dir]
 set -eu
 cd "$(dirname "$0")/.."

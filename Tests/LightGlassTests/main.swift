@@ -51,9 +51,11 @@ func finishedOffer(_ events: [LightGlass.Event]) -> LightGlass.Offer? {
 test("block countdown") {
     var g = fresh(at(3, 9))
     check(g.start(.pomodoro, now: at(3, 9), daylight: sun, calendar: cal), "pomodoro starts")
-    eq(g.statusText(now: at(3, 9)), "25:00")
-    eq(g.statusText(now: at(3, 9, 1)), "24:00")
-    eq(g.statusText(now: at(3, 9, 24, 30)), "0:30")
+    eq(g.statusText(now: at(3, 9)), "0:25", "hours and minutes, no seconds")
+    eq(g.statusText(now: at(3, 9, 0, 30)), "0:25", "a countdown counts the minute it is in")
+    eq(g.statusText(now: at(3, 9, 1)), "0:24")
+    eq(g.statusText(now: at(3, 9, 24)), "0:01", "the last minute")
+    eq(g.statusText(now: at(3, 9, 24, 59)), "0:01", "never 0:00 while it is still running")
     eq(g.tick(now: at(3, 9, 24, 59), daylight: sun, calendar: cal).count, 0, "still running at 24:59")
 
     let events = g.tick(now: at(3, 9, 25), daylight: sun, calendar: cal)
@@ -73,7 +75,7 @@ test("pause and resume") {
     g.start(.pomodoro, now: at(3, 9), daylight: sun, calendar: cal)
     g.pause(now: at(3, 9, 10))
     g.pause(now: at(3, 9, 12))   // second pause is a no-op
-    eq(g.statusText(now: at(3, 9, 20)), "15:00 paused", "time stands still while paused")
+    eq(g.statusText(now: at(3, 9, 20)), "0:15 paused", "time stands still while paused")
     eq(g.tick(now: at(3, 9, 40), daylight: sun, calendar: cal).count, 0, "a paused block never finishes")
     eq(g.snapshot(now: at(3, 9, 20), daylight: sun, calendar: cal).mode, .paused)
 
@@ -104,7 +106,7 @@ test("four pomodoros, then the long break") {
         }
         check(g.acceptOffer(now: t, daylight: sun, calendar: cal), "the break starts on a click")
         eq(g.block?.kind, .rest)
-        eq(g.statusText(now: t), i < 4 ? "5:00 break" : "15:00 break")
+        eq(g.statusText(now: t), i < 4 ? "0:05 break" : "0:15 break")
         t = g.block!.endsAt!
         let next = finishedOffer(g.tick(now: t, daylight: sun, calendar: cal))
         eq(next?.kind, .focus); eq(next?.title, "Start 25 min")
@@ -147,6 +149,7 @@ test("run-past-sunset warning") {
     let snap = p.snapshot(now: now, daylight: sun, calendar: cal)
     eq(snap.warning, "This block ends 5 minutes after sunset.")
     eq(snap.endsAtText, "ends at −11:55 tilrise")
+    eq(snap.endsAtShort, "ends −11:55 TR")
 
     var u = g
     check(u.start(.untilSunset, now: now, daylight: sun, calendar: cal), "until sunset starts")
@@ -169,6 +172,102 @@ test("run-past-sunset warning") {
     eq(d90.snapshot(now: at(3, 17), daylight: sun, calendar: cal).warning, "This block ends 30 minutes after sunset.")
     d90.pause(now: at(3, 17, 10))
     eq(d90.snapshot(now: at(3, 17, 10), daylight: sun, calendar: cal).endsAtText, "ends at −11:30 tilrise if you resume now")
+}
+
+test("a block ending at sunset or sunrise reads the edge, not the night after it") {
+    // Read at the instant itself, an end exactly at sunset sits on the night's first second and printed
+    // the whole night ahead: Melissa's Until sunset block said "ends at −12:15 tilrise".
+    var morning = fresh(at(3, 10))
+    check(morning.start(.untilSunset, now: at(3, 10), daylight: sun, calendar: cal), "until sunset starts in the morning")
+    var snap = morning.snapshot(now: at(3, 10), daylight: sun, calendar: cal)
+    eq(snap.title, "Until sunset")
+    eq(snap.endsAtText, "ends at sunset"); eq(snap.endsAtShort, "ends at sunset")
+    eq(snap.remainingText, "8:00"); eq(snap.warning, nil)
+    snap = morning.snapshot(now: at(3, 17, 59, 30), daylight: sun, calendar: cal)
+    eq(snap.endsAtText, "ends at sunset", "still, half a minute out"); eq(snap.remainingText, "0:01")
+
+    // Its countdown is Horizon Time, so it drops the seconds the way the header beside it does,
+    // instead of reading a minute ahead of it; it still never says 0:00 while running.
+    var mismatches: [String] = []
+    var t = at(3, 10, 0, 17)
+    while t < at(3, 17, 59) {
+        let s = morning.snapshot(now: t, daylight: sun, calendar: cal)
+        if "−\(s.remainingText) tilset" != s.horizonNow { mismatches.append("\(t): \(s.remainingText) vs \(s.horizonNow)") }
+        t = t.addingTimeInterval(4 * 60 + 41)
+    }
+    check(mismatches.isEmpty, "until sunset agrees with Horizon Time: \(mismatches.prefix(3))")
+    eq(morning.statusText(now: at(3, 17, 57, 30)), "0:02")
+    eq(morning.statusText(now: at(3, 17, 58, 30)), "0:01")
+    eq(morning.statusText(now: at(3, 17, 59, 59)), "0:01", "never 0:00 while it runs")
+    var fixed = fresh(at(3, 17, 35))
+    fixed.start(.pomodoro, now: at(3, 17, 35), daylight: sun, calendar: cal)
+    eq(fixed.statusText(now: at(3, 17, 35, 30)), "0:25", "a Pomodoro ending at sunset still counts like a countdown")
+
+    var night = fresh(at(3, 21))
+    check(night.start(.untilSunset, now: at(3, 21), daylight: sun, calendar: cal), "until sunrise starts at night")
+    snap = night.snapshot(now: at(3, 21), daylight: sun, calendar: cal)
+    eq(snap.title, "Until sunrise")
+    eq(snap.endsAtText, "ends at sunrise"); eq(snap.endsAtShort, "ends at sunrise")
+    eq(snap.remainingText, "9:00")
+    var small = fresh(at(4, 3, 20))
+    small.start(.untilSunset, now: at(4, 3, 20), daylight: sun, calendar: cal)
+    eq(small.snapshot(now: at(4, 3, 20), daylight: sun, calendar: cal).endsAtText, "ends at sunrise",
+       "after midnight too")
+
+    var pomodoro = fresh(at(3, 17, 35))
+    pomodoro.start(.pomodoro, now: at(3, 17, 35), daylight: sun, calendar: cal)
+    snap = pomodoro.snapshot(now: at(3, 17, 35), daylight: sun, calendar: cal)
+    eq(snap.endsAtText, "ends at sunset", "a Pomodoro ending exactly at sunset"); eq(snap.warning, nil)
+    pomodoro.pause(now: at(3, 17, 40))
+    eq(pomodoro.snapshot(now: at(3, 17, 40), daylight: sun, calendar: cal).endsAtText,
+       "ends at sunset if you resume now")
+
+    func endsAt(_ start: Date, minutes: Double) -> String? {
+        var g = fresh(start)
+        g.start(.custom, minutes: minutes, now: start, daylight: sun, calendar: cal)
+        return g.snapshot(now: start, daylight: sun, calendar: cal).endsAtText
+    }
+    eq(endsAt(at(3, 17, 35, 30), minutes: 25), "ends at sunset", "half a minute past sunset is still sunset")
+    eq(endsAt(at(3, 17, 34, 1), minutes: 25), "ends at sunset", "59 seconds before it")
+    eq(endsAt(at(3, 17, 33), minutes: 25), "ends at −0:02 tilset", "two minutes before is Horizon Time again")
+    eq(endsAt(at(3, 17, 37), minutes: 25), "ends at −11:58 tilrise", "two minutes after")
+    eq(endsAt(at(4, 4, 30), minutes: 90), "ends at sunrise", "a Deep 90 ending at sunrise")
+}
+
+test("compact labels say TS and TR") {
+    eq(LightGlass.sky(at: at(3, 12), daylight: sun, calendar: cal)?.short, "TS")
+    eq(LightGlass.sky(at: at(3, 21), daylight: sun, calendar: cal)?.short, "TR")
+    var m = fresh(at(3, 10))
+    m.start(.pomodoro, now: at(3, 10), daylight: sun, calendar: cal)
+    eq(m.snapshot(now: at(3, 10), daylight: sun, calendar: cal).endsAtShort, "ends −7:35 TS")
+    var e = fresh(at(3, 17, 40))
+    e.start(.pomodoro, now: at(3, 17, 40), daylight: sun, calendar: cal)
+    eq(e.snapshot(now: at(3, 17, 40), daylight: sun, calendar: cal).endsAtShort, "ends −11:55 TR")
+    e.pause(now: at(3, 17, 45))
+    eq(e.snapshot(now: at(3, 17, 45), daylight: sun, calendar: cal).endsAtShort, "ends −11:55 TR if you resume now")
+    eq(fresh(at(3, 10)).snapshot(now: at(3, 10), daylight: sun, calendar: cal).endsAtShort, nil, "idle: nothing ends")
+}
+
+test("no displayed time carries seconds") {
+    // Every string a running block shows, minute by minute and at odd seconds, across sunset.
+    let hms = try! NSRegularExpression(pattern: "\\d+:\\d{2}:\\d{2}")
+    func hasSeconds(_ s: String?) -> Bool {
+        guard let s = s else { return false }
+        return hms.firstMatch(in: s, range: NSRange(s.startIndex..., in: s)) != nil
+    }
+    var g = fresh(at(3, 11, 0, 17))
+    g.setLabel("Seconds check")
+    g.start(.untilSunset, now: at(3, 11, 0, 17), daylight: sun, calendar: cal)
+    var offenders: [String] = []
+    var t = at(3, 11, 0, 17)
+    while t < at(3, 18) {
+        let snap = g.snapshot(now: t, daylight: sun, calendar: cal)
+        for s in [g.statusText(now: t), snap.remainingText, snap.endsAtText, snap.endsAtShort, snap.horizonNow,
+                  snap.leftText, g.menuTitle(for: .deep90, now: t, daylight: sun, calendar: cal)]
+        where hasSeconds(s) { offenders.append(s ?? "") }
+        t = t.addingTimeInterval(7 * 60 + 13)
+    }
+    check(offenders.isEmpty, "seconds shown: \(offenders.prefix(3))")
 }
 
 test("light share by day and by night") {
@@ -234,7 +333,7 @@ test("relaunch restore") {
     eq(r, g, "state round-trips")
     eq(r.block?.label, "Write the intro")
     eq(r.tick(now: at(3, 9, 10), daylight: sun, calendar: cal).count, 0)
-    eq(r.statusText(now: at(3, 9, 10)), "15:00", "keeps counting down across a relaunch")
+    eq(r.statusText(now: at(3, 9, 10)), "0:15", "keeps counting down across a relaunch")
 
     var gone = LightGlass.load(from: defaults, now: at(3, 9, 30), calendar: cal)
     let events = gone.tick(now: at(3, 9, 30), daylight: sun, calendar: cal)
@@ -253,7 +352,7 @@ test("relaunch restore") {
     p.save(to: defaults)
     var q = LightGlass.load(from: defaults, now: at(3, 13), calendar: cal)
     eq(q.tick(now: at(3, 13), daylight: sun, calendar: cal).count, 0)
-    eq(q.statusText(now: at(3, 13)), "40:00 paused", "a paused block stays paused")
+    eq(q.statusText(now: at(3, 13)), "0:40 paused", "a paused block stays paused")
     q.resume(now: at(3, 13))
     eq(q.block?.endsAt, at(3, 13, 40))
 
@@ -287,7 +386,11 @@ test("label, stop and formats") {
     check(!g.acceptOffer(now: at(3, 9), daylight: sun, calendar: cal), "nothing to accept")
 
     eq(LightGlass.horizon(at: at(3, 15, 13), daylight: sun, calendar: cal), "−2:47 tilset")
-    eq(LightGlass.clock(3725), "1:02:05"); eq(LightGlass.clock(59.2), "1:00")
+    eq(LightGlass.clock(3725), "1:03", "1 h 2 m 5 s left reads 1:03, no seconds")
+    eq(LightGlass.clock(59.2), "0:01"); eq(LightGlass.clock(60), "0:01"); eq(LightGlass.clock(60.5), "0:02")
+    eq(LightGlass.clock(23_985), "6:40", "Melissa's 6:39:45")
+    eq(LightGlass.clock(1500), "0:25"); eq(LightGlass.clock(1500.000_000_1), "0:25", "Date arithmetic noise")
+    eq(LightGlass.clock(0.000_5), "0:01", "any time left is at least a minute"); eq(LightGlass.clock(0), "0:00")
     eq(LightGlass.span(6000), "1 h 40 m"); eq(LightGlass.span(7200), "2 h"); eq(LightGlass.span(1500), "25 m")
 }
 
@@ -452,7 +555,7 @@ test("a state saved by another version still loads") {
     eq(g?.block?.longRest, false); eq(g?.block?.segments, []); eq(g?.block?.label, "")
     eq(g?.offer?.longRest, false); eq(g?.offer?.title, "Start 5-min break")
     eq(g?.label, ""); eq(g?.pomodorosInCycle, 0); eq(g?.tally.blocks, 2); eq(g?.tally.focusSeconds, 0)
-    eq(g?.statusText(now: at(3, 9, 10)), "15:00", "and the block keeps counting")
+    eq(g?.statusText(now: at(3, 9, 10)), "0:15", "and the block keeps counting")
 
     let unreadable = """
     {"tally":{"day":"2026-10-03","blocks":3,"focusSeconds":4500,"lightSeconds":4500},
@@ -550,6 +653,19 @@ test("Light Glass reads the same Horizon Time as the menu bar") {
         check(seen > 200 && mismatches.isEmpty,
               "2026-\(month)-\(day): \(seen) instants, \(mismatches.count) disagree \(mismatches.prefix(3))")
     }
+}
+
+test("Until sunset on the app's real sun reads sunset, as in Melissa's screenshot") {
+    // New York, 3 October 2026: started with 6:39:45 of light left.
+    let set = solar(nyAt(10, 3, 12))!.sunset
+    let start = set.addingTimeInterval(-(6 * 3600 + 39 * 60 + 45))
+    var g = LightGlass(now: start, calendar: ny)
+    check(g.start(.untilSunset, now: start, daylight: solar, calendar: ny), "starts")
+    let snap = g.snapshot(now: start, daylight: solar, calendar: ny)
+    eq(snap.remainingText, "6:39", "the same minutes as Horizon Time"); eq(g.statusText(now: start), "6:39")
+    eq(snap.horizonNow, "−6:39 tilset")
+    eq(snap.endsAtText, "ends at sunset", "not the night after it")
+    eq(snap.endsAtShort, "ends at sunset")
 }
 
 test("light counted across a clock change") {

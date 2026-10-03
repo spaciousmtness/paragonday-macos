@@ -44,6 +44,11 @@ struct LightGlassPalette {
     var button: Color
     var buttonText: Color
     var starlit: Bool
+    /// Every Paragonday page carries a teal accent: the mark in the header, teal on the primary
+    /// button. Gold stays the sunlight's own colour.
+    var brandMark: Color { Self.paragondayTeal }
+
+    static let paragondayTeal = rgb(0x417B7D)
 
     static let day = LightGlassPalette(
         background: [rgb(0xFFFBF3), rgb(0xFAEFD9)],
@@ -51,7 +56,7 @@ struct LightGlassPalette {
         glassLine: rgb(0x4A3B2C, 0.35), glassFill: Color.white.opacity(0.45), frame: rgb(0x4A3426, 0.85),
         sand: [rgb(0xF8C760), rgb(0xEC9640)], band: rgb(0xFFE9A6), mark: rgb(0xA4561B),
         spent: [rgb(0xEBCF9F), rgb(0xD9A766)], stream: rgb(0xF0A93F), warn: rgb(0xB8501A),
-        button: rgb(0x221C15), buttonText: rgb(0xFFFBF3), starlit: false)
+        button: rgb(0x008080), buttonText: rgb(0xFFFBF3), starlit: false)
 
     static let night = LightGlassPalette(
         background: [rgb(0x0D1330), rgb(0x1B2452)],
@@ -59,7 +64,7 @@ struct LightGlassPalette {
         glassLine: rgb(0xC8D2FF, 0.38), glassFill: Color.white.opacity(0.05), frame: rgb(0xB7C1EE, 0.55),
         sand: [rgb(0x6474C2), rgb(0x2F3B7E)], band: rgb(0x9DAEF2), mark: rgb(0xDCE3FF),
         spent: [rgb(0x2A3468), rgb(0x1F2754)], stream: rgb(0xA9B8FF), warn: rgb(0xF4B56E),
-        button: rgb(0xEEF0FF), buttonText: rgb(0x111735), starlit: true)
+        button: rgb(0x169F9F), buttonText: rgb(0x111735), starlit: true)
 }
 
 private func rgb(_ hex: UInt32, _ alpha: Double = 1) -> Color {
@@ -81,7 +86,9 @@ struct LightGlassView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            HStack(alignment: .firstTextBaseline) {
+            HStack(alignment: .center) {
+                ParagondayMark(color: p.brandMark)
+                    .frame(height: 13)
                 Text("LIGHT GLASS")
                     .font(.system(size: 10, weight: .semibold))
                     .tracking(2.2)
@@ -219,6 +226,29 @@ struct LightGlassView: View {
                 .background(Capsule().fill(primary ? p.button : p.ink.opacity(0.07)))
         }
         .buttonStyle(.plain)
+    }
+}
+
+// MARK: - The mark
+
+/// The Paragonday mark: a ring crossed by a gently curved horizon. Geometry from the brand's
+/// paragonday-mark.svg (viewBox 0 56 256 140; ring at 128,124, r 53; horizon M14 152 Q128 96 244 146;
+/// stroke 9, round caps), scaled to the frame's height. At header size the stroke is held at 1.2 pt so
+/// the ring doesn't thin to a hairline.
+struct ParagondayMark: View {
+    var color: Color
+
+    var body: some View {
+        Canvas { ctx, size in
+            let s = size.height / 140
+            func pt(_ x: CGFloat, _ y: CGFloat) -> CGPoint { CGPoint(x: x * s, y: (y - 56) * s) }
+            var path = Path(ellipseIn: CGRect(x: 75 * s, y: 15 * s, width: 106 * s, height: 106 * s))
+            path.move(to: pt(14, 152))
+            path.addQuadCurve(to: pt(244, 146), control: pt(128, 96))
+            ctx.stroke(path, with: .color(color), style: StrokeStyle(lineWidth: max(1.2, 9 * s), lineCap: .round))
+        }
+        .aspectRatio(256 / 140, contentMode: .fit)
+        .accessibilityLabel("Paragonday")
     }
 }
 

@@ -252,7 +252,7 @@ final class LightGlassController: NSObject, NSMenuDelegate, NSPopoverDelegate, U
             var line = "\(snap.title) · \(snap.remainingText) left"
             if !snap.label.isEmpty { line += " · \(snap.label)" }
             items.append(info(line))
-            if let ends = snap.endsAtText { items.append(info(ends)) }
+            if let ends = snap.endsAtShort { items.append(info(ends)) }
             if let warning = snap.warning { items.append(info(warning)) }
             items.append(action(b.isPaused ? "Resume" : "Pause", #selector(menuPauseResume)))
             items.append(action(b.kind == .rest ? "End break" : "Stop", #selector(menuStop)))
