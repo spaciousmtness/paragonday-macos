@@ -304,10 +304,7 @@ final class ParagondayController: NSObject, CLLocationManagerDelegate {
 
         utcRowItem.isHidden = !UserDefaults.standard.bool(forKey: Prefs.utcRowKey)
         if !utcRowItem.isHidden {
-            let f = DateFormatter()
-            f.dateFormat = "yyyy-MM-dd HH:mm:ss 'UTC'"
-            f.timeZone = TimeZone(identifier: "UTC")
-            utcRowItem.title = "UTC: \(f.string(from: now))"
+            utcRowItem.title = LightGlass.utcRow(now)   // hours and minutes: Paragonday never shows seconds
         }
 
         let display = computeDisplay(now: now, coord: coord)
