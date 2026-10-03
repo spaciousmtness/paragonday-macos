@@ -255,11 +255,13 @@ enum MeltFont {
 enum MeltTexture {
     static let tooth: CGImage = noise(width: 160, height: 160, octaves: [(80, 0.45), (40, 0.35), (20, 0.2)], seed: 9,
                                       tint: (0.36, 0.26, 0.16), gain: 0.55)
-    static let mottle: CGImage = noise(width: 96, height: 128, octaves: [(5, 0.55), (11, 0.3), (23, 0.15)], seed: 17)
+    /// The sketch's fMottle: fractal noise whose alpha is 2.2 × noise − 0.9, so only the blotches show.
+    static let mottle: CGImage = noise(width: 96, height: 128, octaves: [(5, 0.55), (11, 0.3), (23, 0.15)], seed: 17,
+                                       gain: 2.2, bias: -0.9)
 
     /// Grey value noise as an image whose alpha is the noise: `octaves` are (cells across, weight).
     private static func noise(width w: Int, height h: Int, octaves: [(Int, Double)], seed: Int,
-                              tint: (Double, Double, Double) = (0, 0, 0), gain: Double = 1) -> CGImage {
+                              tint: (Double, Double, Double) = (0, 0, 0), gain: Double = 1, bias: Double = 0) -> CGImage {
         let R = Hand.rand(seed)
         var grids: [(Int, [Double], Double)] = []
         for (cells, weight) in octaves {
@@ -279,7 +281,7 @@ enum MeltTexture {
                     v += weight * ((a * (1 - sx) + b * sx) * (1 - sy) + (c * (1 - sx) + d * sx) * sy)
                 }
                 let i = (y * w + x) * 4
-                let a = max(0, min(1, v * gain))
+                let a = max(0, min(1, v * gain + bias))
                 px[i] = UInt8(tint.0 * a * 255); px[i + 1] = UInt8(tint.1 * a * 255); px[i + 2] = UInt8(tint.2 * a * 255)
                 px[i + 3] = UInt8(a * 255)
             }
@@ -703,11 +705,21 @@ private struct MeltDrawing {
         if ghost { stroke(c, Hand.curve(Hand.wobble(P, amp * 1.5, seed + 101, wl * 0.8), closed: closed), col.opacity(0.42), w * 0.32) }
     }
 
-    /// A wash of colour: the fill, a darker rim where the paint pooled, and the paper's blotches in it.
+    /// A wash of colour, as the sketch's fWash: a fill that lets a little of what is under it through,
+    /// pooled darker in blotches and at its rim.
     func wash(_ c: GraphicsContext, _ path: Path, _ shading: GraphicsContext.Shading, rim: Color, opacity: Double = 1) {
         var cc = c
-        cc.opacity = opacity
+        cc.opacity = opacity * 0.86
         cc.fill(path, with: shading)
+        cc.opacity = opacity
+        let b = path.boundingRect
+        var blot = cc
+        blot.clip(to: path)
+        blot.clipToLayer { m in
+            m.draw(Image(decorative: MeltTexture.mottle, scale: 1).resizable(),
+                   in: CGRect(x: b.minX - 40, y: b.minY - 30, width: max(b.width, 160) + 80, height: max(b.height, 160) + 60))
+        }
+        blot.fill(path, with: .color(rim.opacity(0.22)))
         cc.stroke(path, with: .color(rim.opacity(0.32)), style: StrokeStyle(lineWidth: 1.4, lineJoin: .round))
     }
 
@@ -916,7 +928,7 @@ private extension MeltDrawing {
         // the paper's tooth over the paint
         var tooth = c
         tooth.blendMode = scene.night ? .screen : .multiply
-        tooth.opacity = scene.night ? 0.25 : 0.55
+        tooth.opacity = scene.night ? 0.2 : 0.28
         let tile = 80 / Double(k)
         let img = Image(decorative: MeltTexture.tooth, scale: 1).interpolation(.medium).resizable()
         var ty = 0.0

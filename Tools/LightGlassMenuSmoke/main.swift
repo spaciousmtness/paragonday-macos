@@ -141,6 +141,8 @@ MainActor.assumeIsolated {
     let nSand = pixel(nightSnap, inSand(nightSnap).0, inSand(nightSnap).1), nSky = pixel(nightSnap, 60, 60)
     check(nightSnap.phase == .night && (nSand.map { $0.b > $0.r } ?? false), "painting: starlit sand by night \(String(describing: nSand))")
     check(nSky.map { $0.r + $0.g + $0.b < 0.75 } ?? false, "painting: the same drawing, dark, by night \(String(describing: nSky))")
+    let unknown = LightGlass(now: launched).snapshot(now: launched, daylight: { _ in nil })
+    check(unknown.phase == nil && pixel(unknown, 60, 60) != nil, "painting: draws with the sky unknown (no location yet)")
     let panel = ImageRenderer(content: LightGlassView(snap: daySnap, actions: LightGlassActions()))
     let size = panel.cgImage.map { CGSize(width: $0.width, height: $0.height) } ?? .zero
     check(size.width == 300 && size.height > 0 && size.height <= 720, "panel stays 300 pt wide and fits a small screen (\(size))")

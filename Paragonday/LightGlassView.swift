@@ -156,7 +156,11 @@ struct LightGlassView: View {
         case .paused:
             return cap("PAUSED · ") + gold("THE LIGHT KEEPS FALLING")
         case .idle:
-            if breakWaiting { return cap("BLOCK DONE · ") + gold("THE BREAK IS YOURS") }
+            if breakWaiting {
+                // "Start 5-min break" on the button; here, what comes next: "5-MIN BREAK NEXT"
+                let next = (snap.offerTitle ?? "break").replacingOccurrences(of: "Start ", with: "")
+                return cap("BLOCK DONE · ") + gold("\(next.uppercased()) NEXT")
+            }
             return cap("READY · \((snap.next?.title ?? "Pomodoro").uppercased())")
         }
     }
